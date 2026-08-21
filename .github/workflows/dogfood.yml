@@ -33,3 +33,4 @@ jobs:
           github-token: ${{ github.token }}
           config-path: .github/issue-investigator.yml
           publish-comment: "true"
+          execution-mode: ${{ secrets.DEEPSEEK_API_KEY != '' && 'execute' || 'plan' }}
