@@ -28,6 +28,11 @@ export interface IssueEventContext {
   commentAuthor: string | null;
 }
 
+export async function isPullRequestIssueEvent(eventPath: string): Promise<boolean> {
+  const event = JSON.parse(await readFile(eventPath, "utf8")) as GitHubEvent;
+  return Boolean(event.issue?.pull_request);
+}
+
 export async function loadIssueEvent(eventPath: string, eventName = ""): Promise<IssueEventContext> {
   const event = JSON.parse(await readFile(eventPath, "utf8")) as GitHubEvent;
   return {
