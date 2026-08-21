@@ -1,7 +1,7 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { applyRuntimeOverrides, loadConfig } from "./config";
-import { loadIssueEvent } from "./event";
+import { isPullRequestIssueEvent, loadIssueEvent } from "./event";
 import type { DuplicateCandidate, InvestigationReport, IssueSnapshot } from "./contracts";
 import { buildInvestigationPrompt } from "./prompt";
 import { shouldInvestigate } from "./policy";
@@ -91,6 +91,15 @@ async function main(): Promise<void> {
   const workspace = process.env.GITHUB_WORKSPACE ?? process.cwd();
   const eventPath = process.env.GITHUB_EVENT_PATH;
   if (!eventPath) throw new Error("GITHUB_EVENT_PATH is not set");
+  if (await isPullRequestIssueEvent(eventPath)) {
+    core.info("Skipping pull request issue_comment event.");
+    core.setOutput("report-json", "");
+    core.setOutput("investigation-status", "skipped");
+    core.setOutput("agent-engine", "none");
+    core.setOutput("provider", "native");
+    core.setOutput("operation", "noop");
+    return;
+  }
 
   const loadedConfig = await loadConfig(workspace, core.getInput("config-path") || ".github/issue-investigator.yml");
   const config = applyRuntimeOverrides(loadedConfig, {

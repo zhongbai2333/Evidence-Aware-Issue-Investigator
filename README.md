@@ -45,6 +45,7 @@ concurrency:
 
 jobs:
   investigate:
+    if: github.event_name != 'issue_comment' || github.event.issue.pull_request == null
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
