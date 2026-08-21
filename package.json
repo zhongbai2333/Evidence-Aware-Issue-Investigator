@@ -1,0 +1,35 @@
+{
+  "name": "evidence-aware-issue-investigator",
+  "version": "0.1.0",
+  "description": "Evidence-aware GitHub Issue investigation with pluggable coding-agent CLIs and model providers.",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "smoke": "node scripts/smoke-action.mjs",
+    "smoke:execute": "node scripts/smoke-execute.mjs",
+    "smoke:fallback": "node scripts/smoke-fallback.mjs",
+    "validate:metadata": "node scripts/validate-metadata.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "all": "npm run typecheck && npm test && npm run build && npm run smoke && npm run smoke:execute && npm run smoke:fallback && npm run validate:metadata"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@actions/core": "^3.0.1",
+    "@actions/github": "^9.1.1",
+    "js-yaml": "^4.1.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

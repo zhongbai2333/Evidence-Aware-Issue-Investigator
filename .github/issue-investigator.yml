@@ -1,0 +1,46 @@
+schemaVersion: 1
+
+cli:
+  install: npx
+  versions:
+    dsh: 0.1.1-rc.1
+
+providers:
+  deepseek:
+    kind: native
+    baseUrl: https://api.deepseek.com
+    protocol: chat-completions
+    model: deepseek-chat
+    auth:
+      mode: environment
+      env: DEEPSEEK_API_KEY
+
+triage:
+  duplicateSearch: true
+  maxDuplicateCandidates: 8
+
+investigation:
+  engine: dsh
+  provider: deepseek
+  trigger: label
+  triggerLabel: AI-Investigate
+  mode: execute
+  timeoutMinutes: 20
+  maxTurns: 20
+  workspace: workspace-write
+  network: false
+
+evidencePolicy:
+  unreproducedMaxPriority: medium
+  requireObservedCommandForReproduced: true
+  requireReplayForVerifiedSteps: true
+  allowUnreproducedHighImpactPriority: false
+
+mutation:
+  mode: maintainer-confirm
+  confirmLabel: Confirm
+  rerunLabel: AI-Rerun
+  assignConfirmer: true
+  applySuggestedTitle: false
+  closeNegativeDispositions: true
+  rerunOnAuthorFollowup: true

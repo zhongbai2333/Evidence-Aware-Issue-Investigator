@@ -1,0 +1,48 @@
+name: Evidence-Aware Issue Investigator
+description: Read code, run bounded investigations, and produce evidence-backed GitHub Issue triage.
+author: zhongbai2333
+
+inputs:
+  github-token:
+    description: Token used only by the controller to read and comment on the Issue.
+    required: false
+  config-path:
+    description: Repository-relative investigator configuration file.
+    required: false
+    default: .github/issue-investigator.yml
+  publish-comment:
+    description: Publish the investigation report as an Issue comment.
+    required: false
+    default: "false"
+  agent-engine:
+    description: Optional runtime override for none, codex, claude, dsh, or custom.
+    required: false
+  provider:
+    description: Optional named provider-profile override.
+    required: false
+  model:
+    description: Optional model override applied to the selected provider profile.
+    required: false
+  execution-mode:
+    description: Optional plan or execute override.
+    required: false
+
+outputs:
+  report-json:
+    description: Validated versioned investigation report.
+  investigation-status:
+    description: planned, completed, failed, or skipped.
+  agent-engine:
+    description: Selected CLI agent engine.
+  provider:
+    description: Selected model provider profile.
+  operation:
+    description: investigate, confirm, followup-rerun, or noop.
+
+runs:
+  using: node24
+  main: dist/index.js
+
+branding:
+  icon: search
+  color: purple
