@@ -1,0 +1,34 @@
+name: Evidence-aware Issue investigation
+
+on:
+  issues:
+    types: [opened, reopened, labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: issue-investigator-${{ github.repository }}-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  investigate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: zhongbai2333/evidence-aware-issue-investigator@v1
+        env:
+          COMPANY_CODING_KEY: ${{ secrets.COMPANY_CODING_KEY }}
+        with:
+          github-token: ${{ github.token }}
+          config-path: .github/issue-investigator.yml
+          publish-comment: "true"

@@ -1,0 +1,69 @@
+schemaVersion: 1
+
+cli:
+  install: preinstalled
+  versions: {}
+
+providers:
+  company-secure:
+    kind: enterprise
+    baseUrl: https://llm.corp.example/v1
+    protocol: responses
+    model: secure-coder
+    auth:
+      mode: command
+      command: /usr/local/bin/fetch-issue-investigator-token
+      args: [--audience, issue-investigator]
+
+  economical:
+    kind: compatible
+    baseUrl: https://gateway.example.com/v1
+    protocol: responses
+    model: economical-coder
+    auth:
+      mode: environment
+      env: ECONOMICAL_CODING_KEY
+
+  local:
+    kind: local
+    baseUrl: http://127.0.0.1:11434/v1
+    protocol: chat-completions
+    model: qwen-coder
+    auth:
+      mode: none
+
+investigation:
+  engine: codex
+  provider: company-secure
+  fallbackProviders: [economical]
+  trigger: label
+  triggerLabel: AI-Investigate
+  mode: plan
+  timeoutMinutes: 15
+  maxTurns: 20
+  workspace: workspace-write
+  network: false
+
+triage:
+  duplicateSearch: true
+  maxDuplicateCandidates: 8
+
+evidencePolicy:
+  unreproducedMaxPriority: medium
+  requireObservedCommandForReproduced: true
+  requireReplayForVerifiedSteps: true
+  allowUnreproducedHighImpactPriority: false
+
+replay:
+  enabled: false
+  executor: container
+  probes: {}
+
+mutation:
+  mode: maintainer-confirm
+  confirmLabel: Confirm
+  rerunLabel: AI-Rerun
+  assignConfirmer: true
+  applySuggestedTitle: false
+  closeNegativeDispositions: true
+  rerunOnAuthorFollowup: true
