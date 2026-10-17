@@ -23,12 +23,14 @@ describe("credential proxy", () => {
     const address = upstream.address(); if (!address || typeof address === "string") throw new Error("no address");
     process.env.TEST_PROVIDER_KEY = "real-provider-secret";
     const proxy = await startCredentialProxy({ upstreamBaseUrl: `http://127.0.0.1:${address.port}`, sourceEnv: "TEST_PROVIDER_KEY",
-      protocol: "responses", maxRequests: 4, headersFromEnv: {}, allowedModel: "test-model", maxOutputTokens: 512 });
+      protocol: "responses", maxRequests: 6, headersFromEnv: {}, allowedModel: "test-model", maxOutputTokens: 512 });
     proxies.push(proxy);
     const post = async (data: object) => await fetch(proxy.baseUrl + "/responses", { method: "POST",
       headers: { authorization: `Bearer ${proxy.token}`, "content-type": "application/json" }, body: JSON.stringify(data) });
     expect((await post({ model: "expensive-other" })).status).toBe(403);
     expect((await post({ model: "test-model", tools: [{ type: "web_search" }] })).status).toBe(403);
+    expect((await post({ model: "test-model", tools: [{ type: "namespace", name: "functions", tools: [{ type: "function", name: "exec" }] }, { type: "tool_search", execution: "client" }] })).status).toBe(200);
+    expect((await post({ model: "test-model", tools: [{ type: "namespace", name: "forbidden", tools: [{ type: "web_search" }] }] })).status).toBe(403);
     expect((await post({ model: "test-model", max_output_tokens: 999999, store: true, background: true })).status).toBe(200);
     expect(payload).toMatchObject({ max_output_tokens: 512, store: false, background: false });
     expect((await post({ model: "test-model", input: "x".repeat(2 * 1024 * 1024) })).status).toBe(413);
