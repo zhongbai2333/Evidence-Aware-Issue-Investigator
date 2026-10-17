@@ -317,7 +317,7 @@ export async function runAgent(plan: AgentInvocationPlan): Promise<AgentRunResul
     const beforeManifest = await collectWorkspaceManifest(agentWorkspace);
     if (plan.reviewedEgress) {
       reviewedEgress = await startReviewedEgressBroker({
-        socketPath: path.join(agentWorkspace, ".issue-investigator/reviewed-egress.sock"),
+        queueDirectory: path.join(agentWorkspace, ".issue-investigator/reviewed-egress"),
         ...plan.reviewedEgress,
       });
     }
