@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Make the bundled Rust compiler and Cargo work under Codex's core shell environment without inherited rustup settings; compile and execute a Rust readiness probe in Linux isolation CI.
+
 - Preserve explicit boundary-phase errors, retry malformed controller JSON once without retrying valid rejections, conservatively format unstructured executor reports, and bound normalized telemetry to the publication schema.
 
 - Warn the executor before its hard model-request budget is exhausted; distinguish controller budget denials from upstream rate limiting in sanitized runtime evidence.

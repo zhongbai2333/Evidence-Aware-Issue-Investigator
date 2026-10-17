@@ -75,6 +75,8 @@ describe.skipIf(!enabled)("real Linux container boundary", () => {
         "assert.match(fs.readFileSync('/proc/self/status','utf8'),/CapEff:\\s+0+\\n/); assert.match(fs.readFileSync('/proc/self/status','utf8'),/NoNewPrivs:\\s+1/);",
         "assert.throws(()=>fs.writeFileSync('/etc/host-escape','x')); assert.notEqual(spawnSync('iptables',['-P','OUTPUT','ACCEPT']).status,0);",
         "assert.equal(fs.readFileSync('/sys/fs/cgroup/pids.max','utf8').trim(),'256');",
+        "const coreEnv={PATH:process.env.PATH,HOME:process.env.HOME}; assert.equal(spawnSync('cargo',['--version'],{env:coreEnv}).status,0);",
+        "fs.writeFileSync('/tmp/readiness.rs','fn main(){println!(\"sandbox-rust-ready\");}'); const build=spawnSync('rustc',['/tmp/readiness.rs','-o','/tmp/readiness'],{env:coreEnv,encoding:'utf8'}); assert.equal(build.status,0,build.stderr); assert.match(spawnSync('/tmp/readiness',[],{encoding:'utf8'}).stdout,/sandbox-rust-ready/);",
         "const publicResponse=await fetch('https://example.com',{signal:AbortSignal.timeout(20000)}); assert.equal(publicResponse.status,200);",
         "const gateway=new URL(process.env.PROXY_URL).hostname;",
         `await assert.rejects(fetch('http://'+gateway+':${hostAddress.port}',{signal:AbortSignal.timeout(1500)}));`,
