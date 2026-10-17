@@ -63,6 +63,31 @@ function customPlan(workspace: string): AgentInvocationPlan {
 }
 
 describe("runAgent", () => {
+  it("reports sanitized stdout and stderr when an agent exits unsuccessfully", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "investigator-runner-"));
+    tempDirectories.push(workspace);
+    await writeFile(
+      path.join(workspace, "mock-agent.mjs"),
+      [
+        'process.stdout.write("provider error at https://api.example.test/v1/responses Authorization: Bearer secret-token");',
+        'process.stderr.write("stderr marker");',
+        "process.exit(9);",
+      ].join("\n"),
+    );
+
+    let message = "";
+    try {
+      await runAgent(customPlan(workspace));
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain("Agent exited with code 9");
+    expect(message).toContain("provider error at [redacted-url]");
+    expect(message).toContain("stderr marker");
+    expect(message).not.toContain("api.example.test");
+    expect(message).not.toContain("secret-token");
+  });
+
   it("runs in a filtered disposable workspace and reports controller-observed changes", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "investigator-runner-"));
     tempDirectories.push(workspace);
