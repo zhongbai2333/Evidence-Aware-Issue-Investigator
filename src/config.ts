@@ -27,6 +27,7 @@ export interface RuntimeOverrides {
   provider?: string;
   model?: string;
   mode?: string;
+  containerImage?: string;
 }
 
 export function applyRuntimeOverrides(
@@ -37,6 +38,7 @@ export function applyRuntimeOverrides(
   if (overrides.engine) config.investigation.engine = overrides.engine as InvestigatorConfig["investigation"]["engine"];
   if (overrides.provider) config.investigation.provider = overrides.provider;
   if (overrides.mode) config.investigation.mode = overrides.mode as InvestigatorConfig["investigation"]["mode"];
+  if (overrides.containerImage) config.investigation.isolation.image = overrides.containerImage;
   const selectedProvider = config.investigation.provider;
   if (overrides.model) {
     if (!selectedProvider || !config.providers[selectedProvider]) {

@@ -15,6 +15,7 @@ import { normalizeEvidence } from "./evidence";
 import { runReplay } from "./replay";
 import { handleStateEvent, type StateOperation } from "./state";
 import { reviewAndDownloadAttachments, type ControllerNetworkReview } from "./network-review";
+import { controllerSecrets, reviewBoundary, screenText, screenValue } from "./boundary";
 
 function publicControllerReview(review: ControllerNetworkReview) {
   return {
@@ -117,9 +118,10 @@ async function main(): Promise<void> {
     provider: core.getInput("provider") || undefined,
     model: core.getInput("model") || undefined,
     mode: core.getInput("execution-mode") || undefined,
+    containerImage: core.getInput("container-image") || undefined,
   });
   const event = await loadIssueEvent(eventPath, process.env.GITHUB_EVENT_NAME ?? "");
-  const issue = event.issue;
+  const issue = screenValue(event.issue, controllerSecrets(resolveProvider(config).provider));
   const { name: providerName, provider } = resolveProvider(config);
   const token = core.getInput("github-token");
   let operation: StateOperation | "investigate" = "noop";
@@ -216,6 +218,13 @@ async function main(): Promise<void> {
           if (attemptName) attemptConfig.investigation.provider = attemptName;
           else delete attemptConfig.investigation.provider;
           const resolved = resolveProvider(attemptConfig);
+          const isolatedOnline = attemptConfig.investigation.isolation.executor === "container";
+          if (isolatedOnline) {
+            assertExecutionSafety(attemptConfig, resolved.provider);
+            duplicateCandidates = screenValue(duplicateCandidates, controllerSecrets(resolved.provider));
+            await reviewBoundary("input", { issue, duplicateCandidates }, resolved.provider!);
+            core.info("Boundary input review approved. Investigation will use an isolated online container.");
+          }
           const controllerReview = attemptConfig.investigation.approvalMode === "auto-review"
             ? await reviewAndDownloadAttachments(issue, resolved.provider)
             : {
@@ -233,6 +242,7 @@ async function main(): Promise<void> {
           }
           const prompt = buildInvestigationPrompt(issue, {
             duplicateCandidates,
+            isolatedOnline,
             controllerReview: {
               ...publicControllerReview(controllerReview),
               reviewedEgressAvailable: attemptConfig.investigation.approvalMode === "auto-review" && !!resolved.provider,
@@ -292,6 +302,15 @@ async function main(): Promise<void> {
             workspaceChanges: result.workspaceChanges,
             replay,
           });
+          completedReport = screenValue(completedReport, controllerSecrets(resolved.provider));
+          if (isolatedOnline) {
+            completedReport.assessment.limitations = completedReport.assessment.limitations.slice(0, 29);
+            completedReport.assessment.limitations.push("Container executor telemetry is untrusted evidence; no independent clean replay was performed unless separately reported.");
+            // The reviewer runs outside the executor and can neither execute its output nor grant tools.
+            await reviewBoundary("output", completedReport, resolved.provider!);
+            investigationReportSchema.parse(completedReport);
+            core.info("Boundary output review approved. Container and model proxy have been destroyed before publication.");
+          }
           if (controllerReview.status === "completed") {
             completedReport.evidence.observations.push(
               `Controller Auto-review approved and supplied ${controllerReview.attachments.length} public Issue attachment(s).`,
@@ -307,7 +326,8 @@ async function main(): Promise<void> {
           }
           break;
         } catch (error) {
-          const failure = error instanceof Error ? error.message : String(error);
+          completedReport = null;
+          const failure = screenText(error instanceof Error ? error.message : String(error), Object.values(config.providers).flatMap((entry) => controllerSecrets(entry))).replace(/(?:https?|wss?):\/\/\S+/gi, "[redacted-url]");
           failures.push(`${attemptName ?? "native"}: ${failure.slice(0, 1000)}`);
           core.warning(`Investigation attempt failed for provider ${attemptName ?? "native"}: ${failure}`);
         }
@@ -329,5 +349,5 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  core.setFailed(error instanceof Error ? error.message : String(error));
+  core.setFailed(screenText(error instanceof Error ? error.message : String(error)).replace(/(?:https?|wss?):\/\/\S+/gi, "[redacted-url]"));
 });

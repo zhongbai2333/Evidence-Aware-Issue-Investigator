@@ -1,5 +1,7 @@
 # Security model
 
+The optional [isolated online executor](docs/ISOLATED-EXECUTION.md) uses a hardened disposable container as the boundary. It permits normal public networking without per-request approval, while real credentials, host access, GitHub writes and publication remain outside. Independent input/output reviews supplement deterministic isolation. This mode shares the host kernel and does not claim absolute isolation; use only a dedicated ephemeral Linux runner.
+
 ## Trust boundaries
 
 The controller and its configuration from the checked-out trusted revision are trusted. Issue titles, bodies, comments, repository files, dependency scripts, agent output, test output, and generated reproduction steps are untrusted data.

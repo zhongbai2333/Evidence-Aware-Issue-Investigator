@@ -1,5 +1,7 @@
 # Configuration reference
 
+For normal public networking inside a disposable container, see [isolated execution](ISOLATED-EXECUTION.md). That mode uses `network: true`, `approvalMode: never`, `isolation.executor: container`, and the immutable `container-image` Action input. The Bubblewrap prerequisites below apply only to process execution.
+
 The default path is `.github/issue-investigator.yml`. Configuration is loaded from the checked-out trusted revision and validated before any Agent process starts.
 
 ## CLI lifecycle
@@ -156,4 +158,4 @@ Codex uses Bubblewrap for its Linux filesystem and network sandbox. On a GitHub-
     sudo apparmor_parser -r /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
 ```
 
-Without this prerequisite, every Agent shell command can fail before execution with `bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`. Keep the Codex sandbox enabled; do not replace this setup with `danger-full-access` or a sandbox bypass.
+Without this prerequisite, process-mode Agent shell commands can fail before execution with `bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`. Keep the Codex sandbox enabled in process mode. Only the independently isolated container executor configures `danger-full-access` internally.

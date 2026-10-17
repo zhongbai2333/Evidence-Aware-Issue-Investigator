@@ -34,6 +34,12 @@ describe("runtime model switching", () => {
 });
 
 describe("loadConfig", () => {
+  it("requires an isolated online Codex execution policy and validates immutable image IDs", () => {
+    const investigation = { engine: "codex", network: true, isolation: { executor: "container", image: "sha256:" + "a".repeat(64) } };
+    expect(configSchema.parse({ investigation }).investigation.isolation.modelRequests).toBe(40);
+    expect(() => configSchema.parse({ investigation: { ...investigation, network: false } })).toThrow("Container isolation requires");
+    expect(() => configSchema.parse({ investigation: { ...investigation, isolation: { executor: "container", image: "node:latest" } } })).toThrow();
+  });
   it("validates the repository dogfood configuration", async () => {
     const config = await loadConfig(process.cwd(), ".github/issue-investigator.yml");
     expect(config.investigation.engine).toBe("codex");

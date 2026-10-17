@@ -51,8 +51,23 @@ const investigationSchema = z
     reviewedNetworkMaxRequests: z.number().int().min(1).max(25).default(8),
     reviewedNetworkMaxResponseBytes: z.number().int().min(1024).max(10 * 1024 * 1024).default(2 * 1024 * 1024),
     allowUnsafeCredentialInheritance: z.boolean().default(false),
+    isolation: z.object({
+      executor: z.enum(["process", "container"]).default("process"),
+      image: z.string().regex(/^(?:[A-Za-z0-9./:_-]+@)?sha256:[0-9a-f]{64}$/).optional(),
+      cpus: z.number().min(0.5).max(4).default(2),
+      memoryMb: z.number().int().min(512).max(8192).default(4096),
+      diskMb: z.number().int().min(256).max(8192).default(3072),
+      pids: z.number().int().min(32).max(512).default(256),
+      modelRequests: z.number().int().min(1).max(100).default(40),
+      maxOutputTokens: z.number().int().min(256).max(16384).default(8192),
+      publicNetworkMb: z.number().int().min(16).max(2048).default(512),
+    }).prefault({}),
   })
   .superRefine((investigation, context) => {
+    if (investigation.isolation.executor === "container" &&
+        (investigation.engine !== "codex" || investigation.approvalMode !== "never" || !investigation.network)) {
+      context.addIssue({ code: "custom", path: ["isolation"], message: "Container isolation requires engine=codex, approvalMode=never and network=true" });
+    }
     if (investigation.approvalMode === "auto-review" && investigation.engine !== "codex") {
       context.addIssue({
         code: "custom",
@@ -68,7 +83,7 @@ const investigationSchema = z
       });
     }
   })
-  .default({
+  .prefault({
     engine: "none",
     fallbackProviders: [],
     trigger: "label",
@@ -207,7 +222,7 @@ export const configSchema = z
         rerunOnAuthorFollowup: true,
       }),
   })
-  .default({
+  .prefault({
     schemaVersion: 1,
     cli: { install: "preinstalled", versions: {} },
     providers: {},

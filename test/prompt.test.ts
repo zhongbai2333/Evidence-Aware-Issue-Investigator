@@ -3,6 +3,13 @@ import { buildInvestigationPrompt } from "../src/prompt";
 import { issueFixture } from "./fixtures";
 
 describe("buildInvestigationPrompt", () => {
+  it("allows protocol-level public investigation in external isolation", () => {
+    const prompt = buildInvestigationPrompt(issueFixture, { isolatedOnline: true });
+    expect(prompt).toContain("public Internet access");
+    expect(prompt).toContain("WebSocket tools without per-request approval");
+    expect(prompt).not.toContain("Direct network access is unavailable");
+    expect(prompt).toContain("compare current upstream source/changelog");
+  });
   it("marks Issue text as untrusted and forbids repository publication", () => {
     const prompt = buildInvestigationPrompt({
       ...issueFixture,

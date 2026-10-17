@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add isolated online Codex execution with disposable hardened containers, normal public networking, external credentials/publication, independent input/output reviews and Linux boundary integration tests.
+
 - Initial Node 24 GitHub Action.
 - Pluggable Codex, Claude Code, dsh, and custom engines.
 - Native model/provider switching with exact CLI lifecycle controls.

@@ -1,4 +1,4 @@
-import type { ProviderConfig } from "./schema";
+import type { ProviderConfig, InvestigatorConfig } from "./schema";
 
 export type AgentEngine = "none" | "codex" | "claude" | "dsh" | "custom";
 
@@ -43,6 +43,7 @@ export interface AgentInvocationPlan {
   >;
   generatedFiles: Record<string, string>;
   workspaceFiles?: Record<string, Buffer>;
+  isolation?: InvestigatorConfig["investigation"]["isolation"];
   reviewedEgress?: {
     issue: IssueSnapshot;
     provider: ProviderConfig;
@@ -62,6 +63,8 @@ export interface AgentInvocationPlan {
     protocol: ProviderProtocol;
     maxRequests: number;
     headersFromEnv: Record<string, string>;
+    allowedModel?: string;
+    maxOutputTokens?: number;
   } | null;
 }
 

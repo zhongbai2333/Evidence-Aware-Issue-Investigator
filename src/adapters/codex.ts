@@ -13,12 +13,13 @@ function renderProviderConfig(
   _approvalMode: "never" | "auto-review",
   baseUrlOverride: string | null,
   envKeyOverride: string | null,
+  externalIsolation = false,
 ): string {
   const lines = [
     `model = ${tomlString(provider.model)}`,
     'approval_policy = "never"',
     'web_search = "disabled"',
-    'sandbox_mode = "workspace-write"',
+    `sandbox_mode = "${externalIsolation ? "danger-full-access" : "workspace-write"}"`,
     "allow_login_shell = false",
     "",
     "[sandbox_workspace_write]",
@@ -70,6 +71,7 @@ function renderProviderConfig(
 export class CodexAdapter implements AgentAdapter {
   plan(context: AdapterContext): AgentInvocationPlan {
     const { config, provider, providerName, prompt, workspace } = context;
+    const isolated = config.investigation.isolation.executor === "container";
     const cli = resolveCli(config, "codex", "codex");
     const credential = proxiedCredential(
       provider,
@@ -84,7 +86,7 @@ export class CodexAdapter implements AgentAdapter {
       "--skip-git-repo-check",
       "--json",
       "--sandbox",
-      config.investigation.workspace,
+      isolated ? "danger-full-access" : config.investigation.workspace,
       "--ignore-rules",
       "--output-schema",
       "{schemaPath}",
@@ -102,6 +104,7 @@ export class CodexAdapter implements AgentAdapter {
         config.investigation.approvalMode,
         credential.baseUrl,
         credential.envKey,
+        isolated,
       );
     }
 
@@ -124,6 +127,7 @@ export class CodexAdapter implements AgentAdapter {
       timeoutMs: timeoutMs(config),
       versionCheck: cli.versionCheck,
       credentialProxy: credential.proxy,
+      ...(isolated ? { isolation: config.investigation.isolation } : {}),
     };
   }
 }

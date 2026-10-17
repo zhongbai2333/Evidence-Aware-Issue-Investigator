@@ -21,3 +21,20 @@ jobs:
       - run: npm run all
       - name: Verify committed Action bundle
         run: git diff --exit-code -- dist
+
+  container-boundary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build trusted executor image
+        run: docker build --iidfile /tmp/eai-image.id -f container/Dockerfile .
+      - name: Exercise real isolation and public networking
+        run: EAI_CONTAINER_IMAGE="$(cat /tmp/eai-image.id)" npm test -- test/container.test.ts
