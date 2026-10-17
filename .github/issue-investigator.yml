@@ -28,6 +28,7 @@ investigation:
   timeoutMinutes: 20
   maxTurns: 20
   workspace: workspace-write
+  approvalMode: auto-review
   network: false
 
 evidencePolicy:

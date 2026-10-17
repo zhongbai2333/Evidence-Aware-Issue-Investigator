@@ -19,6 +19,7 @@ Provider and model switching are native features. CCSwitch and similar tools may
 - Exact preinstalled CLI version checks or exact-version `npx` execution.
 - Filtered `.git`-less disposable Agent workspaces.
 - Short-lived controller credential proxy; real environment Provider keys do not enter built-in Agent processes.
+- Optional Codex Auto-review using the selected custom Provider/model for reviewed sandbox-boundary requests.
 - Codex JSONL command-event capture and controller-observed workspace changes.
 - Strict bounded report Schema, duplicate-target validation, and priority caps for unreproduced reports.
 - Controller-approved probe replay on a second clean copy, optionally in a digest-pinned container.
@@ -103,6 +104,8 @@ investigation:
 ```
 
 The same engine can therefore use an official model, a compatible commercial model, an internal gateway, or a local endpoint without changing the investigation pipeline.
+
+For Codex, `investigation.approvalMode: auto-review` keeps the Agent in its workspace sandbox and routes eligible boundary requests—such as a narrowly scoped, read-only attachment download—to a separate Reviewer Agent. The Reviewer uses the selected Provider/model; an OpenAI account is not required for a compatible custom Provider. Keep `investigation.network: false` so network access is reviewed instead of pre-authorized. Compatibility still depends on the selected model following Codex's structured Reviewer protocol, so validate each advertised Provider/model combination with a live run.
 
 The workflow can switch at runtime too:
 

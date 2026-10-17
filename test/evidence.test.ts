@@ -87,4 +87,26 @@ describe("normalizeEvidence", () => {
     expect(rejected.assessment.disposition).toBe("none");
     expect(rejected.assessment.duplicate_of).toBeNull();
   });
+
+  it("redacts external endpoint URLs from controller and Agent evidence", () => {
+    const raw = report();
+    raw.investigation.summary = "Upstream failed at https://speech.example.test/path?token=secret";
+    raw.assessment.limitations = ["Could not reach https://api.example.test/v1"];
+    raw.evidence.observations = ["GET https://service.example.test/private"];
+    const normalized = normalizeEvidence(raw, {
+      config,
+      duplicateCandidates: [],
+      observedCommands: [{
+        command: "curl https://speech.example.test/path",
+        exitCode: 22,
+        observation: "403 from https://speech.example.test/path",
+      }],
+      workspaceChanges: [],
+    });
+    const serialized = JSON.stringify(normalized);
+    expect(serialized).not.toContain("speech.example.test");
+    expect(serialized).not.toContain("api.example.test");
+    expect(serialized).not.toContain("service.example.test");
+    expect(serialized).toContain("[redacted-url]");
+  });
 });

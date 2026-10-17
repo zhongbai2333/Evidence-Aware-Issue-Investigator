@@ -10,12 +10,15 @@ function renderProviderConfig(
   providerName: string,
   provider: ProviderConfig,
   network: boolean,
+  approvalMode: "never" | "auto-review",
   baseUrlOverride: string | null,
   envKeyOverride: string | null,
 ): string {
+  const autoReview = approvalMode === "auto-review";
   const lines = [
     `model = ${tomlString(provider.model)}`,
-    'approval_policy = "never"',
+    `approval_policy = "${autoReview ? "on-request" : "never"}"`,
+    ...(autoReview ? ['approvals_reviewer = "auto_review"'] : []),
     'web_search = "disabled"',
     'sandbox_mode = "workspace-write"',
     "allow_login_shell = false",
@@ -78,6 +81,7 @@ export class CodexAdapter implements AgentAdapter {
     const args = [
       ...cli.prefix,
       "exec",
+      "--strict-config",
       "--ephemeral",
       "--skip-git-repo-check",
       "--json",
@@ -97,6 +101,7 @@ export class CodexAdapter implements AgentAdapter {
         "investigator",
         provider,
         config.investigation.network,
+        config.investigation.approvalMode,
         credential.baseUrl,
         credential.envKey,
       );
