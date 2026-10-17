@@ -241,7 +241,7 @@ export const REPORT_JSON_SCHEMA = {
   additionalProperties: false,
   required: ["schema_version", "issue", "agent", "investigation", "reproduction", "evidence", "assessment"],
   properties: {
-    schema_version: { const: 1 },
+    schema_version: { type: "integer", const: 1 },
     issue: {
       type: "object",
       additionalProperties: false,
@@ -258,7 +258,7 @@ export const REPORT_JSON_SCHEMA = {
       additionalProperties: false,
       required: ["engine", "provider", "model"],
       properties: {
-        engine: { enum: ["none", "codex", "claude", "dsh", "custom"] },
+        engine: { type: "string", enum: ["none", "codex", "claude", "dsh", "custom"] },
         provider: { type: ["string", "null"], maxLength: 200 },
         model: { type: ["string", "null"], maxLength: 300 },
       },
@@ -268,11 +268,11 @@ export const REPORT_JSON_SCHEMA = {
       additionalProperties: false,
       required: ["status", "summary", "code_path_identified", "test_attempted", "environment_match"],
       properties: {
-        status: { enum: ["planned", "completed", "failed", "skipped"] },
+        status: { type: "string", enum: ["planned", "completed", "failed", "skipped"] },
         summary: { type: "string", maxLength: 4000 },
         code_path_identified: { type: "boolean" },
         test_attempted: { type: "boolean" },
-        environment_match: { enum: ["exact", "partial", "mismatch", "unknown"] },
+        environment_match: { type: "string", enum: ["exact", "partial", "mismatch", "unknown"] },
       },
     },
     reproduction: {
@@ -280,7 +280,7 @@ export const REPORT_JSON_SCHEMA = {
       additionalProperties: false,
       required: ["status", "requested_probe", "user_steps", "proposed_steps", "verified_steps"],
       properties: {
-        status: { enum: ["reproduced", "not-reproduced", "inconclusive", "not-attempted"] },
+        status: { type: "string", enum: ["reproduced", "not-reproduced", "inconclusive", "not-attempted"] },
         requested_probe: { type: ["string", "null"], maxLength: 100 },
         user_steps: { type: "array", maxItems: 20, items: { type: "string", maxLength: 1000 } },
         proposed_steps: { type: "array", maxItems: 20, items: { type: "string", maxLength: 1000 } },
@@ -328,14 +328,14 @@ export const REPORT_JSON_SCHEMA = {
       additionalProperties: false,
       required: ["type", "disposition", "duplicate_of", "priority", "risk_flags", "needs_info", "suggested_title", "questions", "confidence", "limitations"],
       properties: {
-        type: { enum: ["bug", "enhancement", "documentation", "question", "unknown"] },
-        disposition: { enum: ["none", "duplicate", "wontfix", "invalid"] },
+        type: { type: "string", enum: ["bug", "enhancement", "documentation", "question", "unknown"] },
+        disposition: { type: "string", enum: ["none", "duplicate", "wontfix", "invalid"] },
         duplicate_of: { type: ["integer", "null"] },
-        priority: { enum: ["critical", "high", "medium", "low", "none"] },
+        priority: { type: "string", enum: ["critical", "high", "medium", "low", "none"] },
         risk_flags: {
           type: "array",
           uniqueItems: true,
-          items: { enum: ["security", "data-loss", "complete-outage"] },
+          items: { type: "string", enum: ["security", "data-loss", "complete-outage"] },
         },
         needs_info: { type: "boolean" },
         suggested_title: { type: ["string", "null"], maxLength: 200 },
