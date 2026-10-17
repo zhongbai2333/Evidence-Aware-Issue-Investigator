@@ -115,11 +115,13 @@ function extractResponseText(payload: unknown): string {
   if (!payload || typeof payload !== "object") return "";
   const response = payload as {
     output_text?: string;
-    output?: Array<{ content?: Array<{ text?: string; type?: string }> }>;
+    output?: Array<{ type?: string; content?: Array<{ text?: string; type?: string }> }>;
   };
   if (typeof response.output_text === "string") return response.output_text;
   return (response.output ?? [])
+    .filter((item) => item.type !== "reasoning")
     .flatMap((item) => item.content ?? [])
+    .filter((part) => !part.type || part.type === "output_text" || part.type === "text")
     .map((item) => typeof item.text === "string" ? item.text : "")
     .filter(Boolean)
     .join("\n");
