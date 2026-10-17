@@ -33,8 +33,10 @@ describe("credential proxy", () => {
     expect((await post({ model: "test-model", tools: [{ type: "namespace", name: "forbidden", tools: [{ type: "web_search" }] }] })).status).toBe(403);
     expect((await post({ model: "test-model", max_output_tokens: 999999, store: true, background: true })).status).toBe(200);
     expect(payload).toMatchObject({ max_output_tokens: 512, store: false, background: false });
+    expect(JSON.stringify(payload.input)).toContain("Finish the structured report before the hard limit");
     expect((await post({ model: "test-model", input: "x".repeat(2 * 1024 * 1024) })).status).toBe(413);
     expect((await post({ model: "test-model" })).status).toBe(429);
+    expect(proxy.stats()).toMatchObject({ budgetDenied: 1, upstreamRateLimited: 0 });
   });
   it("keeps the real provider key in the controller and injects it only upstream", async () => {
     let receivedAuthorization = "";
