@@ -42,6 +42,7 @@ investigation:
   timeoutMinutes: 15
   maxTurns: 20
   workspace: workspace-write
+  approvalMode: auto-review
   network: false
 
 triage:

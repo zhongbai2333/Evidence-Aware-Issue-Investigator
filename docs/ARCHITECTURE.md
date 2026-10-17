@@ -9,7 +9,7 @@
 5. Resolve engine, Provider/model, exact CLI lifecycle, and Provider fallback order.
 6. Copy source into a filtered `.git`-less disposable workspace.
 7. Start a short-lived credential proxy when environment authentication is configured.
-8. Run the Agent with bounded time/output and a strict output Schema.
+8. Run the Agent with bounded time/output and a strict output Schema; optionally route Codex boundary requests through a Provider-neutral Auto-review Agent.
 9. Capture controller-observable CLI events and workspace changes.
 10. Optionally run one Agent-requested, controller-approved probe on another clean copy.
 11. Rebind identity, validate duplicate targets, normalize evidence, and cap priority.
@@ -59,4 +59,4 @@ Container replay requires an immutable image digest and uses no capabilities, no
 
 ## Evidence ownership
 
-Agent observations remain untrusted. Controller-observed command events, file changes, duplicate candidates, and clean replay results are separate evidence lanes. Only controller evidence can preserve a `reproduced` claim or produce `verified_steps` under the default policy.
+Agent observations and Auto-review decisions remain untrusted. Controller-observed command events, file changes, duplicate candidates, and clean replay results are separate evidence lanes. Only controller evidence can preserve a `reproduced` claim or produce `verified_steps` under the default policy. Endpoint URLs are redacted before report publication and marker encoding.

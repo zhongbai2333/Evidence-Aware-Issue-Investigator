@@ -46,8 +46,25 @@ const investigationSchema = z
     timeoutMinutes: z.number().int().min(1).max(60).default(15),
     maxTurns: z.number().int().min(1).max(100).default(20),
     workspace: z.enum(["read-only", "workspace-write"]).default("workspace-write"),
+    approvalMode: z.enum(["never", "auto-review"]).default("never"),
     network: z.boolean().default(false),
     allowUnsafeCredentialInheritance: z.boolean().default(false),
+  })
+  .superRefine((investigation, context) => {
+    if (investigation.approvalMode === "auto-review" && investigation.engine !== "codex") {
+      context.addIssue({
+        code: "custom",
+        path: ["approvalMode"],
+        message: "Auto-review currently requires the Codex engine",
+      });
+    }
+    if (investigation.approvalMode === "auto-review" && investigation.network) {
+      context.addIssue({
+        code: "custom",
+        path: ["network"],
+        message: "Auto-review requires network=false so each network escalation crosses the review boundary",
+      });
+    }
   })
   .default({
     engine: "none",
@@ -60,6 +77,7 @@ const investigationSchema = z
     timeoutMinutes: 15,
     maxTurns: 20,
     workspace: "workspace-write",
+    approvalMode: "never",
     network: false,
     allowUnsafeCredentialInheritance: false,
   });
@@ -201,6 +219,7 @@ export const configSchema = z
       timeoutMinutes: 15,
       maxTurns: 20,
       workspace: "workspace-write",
+      approvalMode: "never",
       network: false,
       allowUnsafeCredentialInheritance: false,
     },

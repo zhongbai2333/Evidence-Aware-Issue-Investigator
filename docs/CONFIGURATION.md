@@ -49,10 +49,15 @@ investigation:
   timeoutMinutes: 15
   maxTurns: 20
   workspace: workspace-write # read-only | workspace-write
+  approvalMode: auto-review # never | auto-review (Codex only)
   network: false
 ```
 
 `command` and `argsPrefix` may select a trusted preinstalled wrapper. They are configuration, not Issue-controlled input, and are always executed with `shell: false`.
+
+With `approvalMode: auto-review`, Codex keeps `network: false` as the default boundary and sends eligible escalation requests to a separate Reviewer Agent. The Reviewer is invoked through the selected Provider and model, including compatible non-OpenAI Providers. This does not grant unrestricted network access: each blocked request must be proposed, reviewed, and approved. Configuration rejects `auto-review` together with `network: true`, because that would pre-authorize network traffic and bypass the intended review point.
+
+Auto-review requires the selected model to follow Codex's structured Reviewer protocol. Treat a passing schema/unit test as insufficient; run a live boundary-crossing test for each Provider/model combination before enabling it in production.
 
 ## Triage and evidence
 

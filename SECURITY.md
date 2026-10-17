@@ -16,6 +16,7 @@ The project does not treat prompt instructions as a security boundary.
 - Generated temporary paths are validated against path traversal.
 - CLI processes are started with argument arrays and `shell: false`.
 - Reports must match a strict schema, and controller-owned Issue/agent identity is rebound after execution.
+- External endpoint URLs are redacted from normalized public report evidence and embedded report markers.
 
 ## Credential warning
 
@@ -42,7 +43,7 @@ The implementation:
 
 ## Engine-specific boundary
 
-Codex execution uses its workspace sandbox and network policy. Claude Code and dsh use their own permission systems inside the filtered disposable workspace; do not enable broader tool permissions than needed. A custom engine that directly inherits a key is rejected unless the caller explicitly opts into unsafe inheritance.
+Codex execution uses its workspace sandbox and network policy. With `approvalMode: auto-review`, network remains blocked by default and eligible boundary requests are reviewed by a separate Agent using the selected Provider/model. Auto-review is not a deterministic security guarantee and does not replace runner-level isolation or egress controls. Claude Code and dsh use their own permission systems inside the filtered disposable workspace; do not enable broader tool permissions than needed. A custom engine that directly inherits a key is rejected unless the caller explicitly opts into unsafe inheritance.
 
 Replay container isolation does not automatically containerize the Agent CLI itself. For private source requiring hard egress containment, run this Action on a dedicated runner with an outbound policy or keep `investigation.mode: plan`.
 

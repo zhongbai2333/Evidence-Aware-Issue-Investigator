@@ -56,15 +56,35 @@ describe("agent adapters", () => {
     const config = invocation.generatedFiles["codex-home/config.toml"];
     expect(invocation.command).toBe("codex");
     expect(invocation.args).toContain("--output-schema");
+    expect(invocation.args).toContain("--strict-config");
     expect(invocation.args).toContain("--skip-git-repo-check");
     expect(invocation.args).not.toContain("--ask-for-approval");
     expect(config).toContain('model = "coder-small"');
     expect(config).toContain('approval_policy = "never"');
+    expect(config).not.toContain('approvals_reviewer = "auto_review"');
     expect(config).toContain('web_search = "disabled"');
     expect(config).toContain('base_url = "{proxyBaseUrl}"');
     expect(config).toContain('env_key = "ISSUE_INVESTIGATOR_PROXY_TOKEN"');
     expect(invocation.credentialProxy?.upstreamBaseUrl).toBe("https://gateway.example/v1");
     expect(config).toContain("ignore_default_excludes = false");
+  });
+
+  it("routes Codex boundary escalations through provider-neutral auto-review", () => {
+    const config = makeConfig("codex");
+    config.investigation.approvalMode = "auto-review";
+    const resolved = resolveProvider(config);
+    const invocation = planAgentInvocation({
+      config,
+      providerName: resolved.name,
+      provider: resolved.provider,
+      prompt: "investigate",
+      workspace: "/workspace",
+    });
+    const generated = invocation.generatedFiles["codex-home/config.toml"];
+    expect(generated).toContain('approval_policy = "on-request"');
+    expect(generated).toContain('approvals_reviewer = "auto_review"');
+    expect(generated).toContain("network_access = false");
+    expect(invocation.credentialProxy?.upstreamBaseUrl).toBe("https://gateway.example/v1");
   });
 
   it("switches the Codex model and endpoint by selecting another provider", () => {

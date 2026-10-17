@@ -11,6 +11,35 @@ const priorityRank = {
   critical: 4,
 } as const;
 
+const EXTERNAL_URL = /https?:\/\/[^\s"'<>)}\]]+/gi;
+
+function redactEndpointUrls(value: string): string {
+  return value.replace(EXTERNAL_URL, "[redacted-url]");
+}
+
+function redactReportEndpointUrls(report: InvestigationReport): void {
+  report.investigation.summary = redactEndpointUrls(report.investigation.summary);
+  report.reproduction.user_steps = report.reproduction.user_steps.map(redactEndpointUrls);
+  report.reproduction.proposed_steps = report.reproduction.proposed_steps.map(redactEndpointUrls);
+  report.reproduction.verified_steps = report.reproduction.verified_steps.map(redactEndpointUrls);
+  report.evidence.commands = report.evidence.commands.map((command) => ({
+    ...command,
+    command: redactEndpointUrls(command.command),
+    observation: redactEndpointUrls(command.observation),
+  }));
+  report.evidence.code_locations = report.evidence.code_locations.map((location) => ({
+    ...location,
+    path: redactEndpointUrls(location.path),
+    relevance: redactEndpointUrls(location.relevance),
+  }));
+  report.evidence.observations = report.evidence.observations.map(redactEndpointUrls);
+  report.assessment.questions = report.assessment.questions.map(redactEndpointUrls);
+  report.assessment.limitations = report.assessment.limitations.map(redactEndpointUrls);
+  if (report.assessment.suggested_title) {
+    report.assessment.suggested_title = redactEndpointUrls(report.assessment.suggested_title);
+  }
+}
+
 function capPriority(
   priority: InvestigationReport["assessment"]["priority"],
   cap: "medium" | "low",
@@ -113,5 +142,6 @@ export function normalizeEvidence(
     report.assessment.confidence = Math.min(report.assessment.confidence, 0.7);
   }
   report.assessment.limitations = [...new Set(report.assessment.limitations)];
+  redactReportEndpointUrls(report);
   return report;
 }

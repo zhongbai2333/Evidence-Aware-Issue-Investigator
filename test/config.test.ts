@@ -73,4 +73,23 @@ describe("loadConfig", () => {
     tempDirectories.push(workspace);
     await expect(loadConfig(workspace, "../secrets.yml")).rejects.toThrow("escapes the workspace");
   });
+
+  it("keeps reviewed network access behind the Codex sandbox boundary", () => {
+    const configured = configSchema.parse({
+      investigation: {
+        engine: "codex",
+        approvalMode: "auto-review",
+        network: false,
+      },
+    });
+    expect(configured.investigation.approvalMode).toBe("auto-review");
+
+    expect(() => configSchema.parse({
+      investigation: {
+        engine: "codex",
+        approvalMode: "auto-review",
+        network: true,
+      },
+    })).toThrow("each network escalation crosses the review boundary");
+  });
 });
