@@ -56,7 +56,9 @@ describe("agent adapters", () => {
     const config = invocation.generatedFiles["codex-home/config.toml"];
     expect(invocation.command).toBe("codex");
     expect(invocation.args).toContain("--output-schema");
+    expect(invocation.args).not.toContain("--ask-for-approval");
     expect(config).toContain('model = "coder-small"');
+    expect(config).toContain('approval_policy = "never"');
     expect(config).toContain('base_url = "{proxyBaseUrl}"');
     expect(config).toContain('env_key = "ISSUE_INVESTIGATOR_PROXY_TOKEN"');
     expect(invocation.credentialProxy?.upstreamBaseUrl).toBe("https://gateway.example/v1");
