@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { configSchema } from "../src/schema";
-import { extractPublicAttachmentCandidates, reviewAndDownloadAttachments } from "../src/network-review";
+import { extractPublicAttachmentCandidates, reviewAndDownloadAttachments, reviewExactNetworkRequest } from "../src/network-review";
 import { issueFixture } from "./fixtures";
 
 afterEach(() => {
@@ -85,5 +85,21 @@ describe("controller network review", () => {
     expect(review.status).toBe("failed");
     expect(review.attachments).toEqual([]);
     expect(review.summary).toContain("HTTP 503");
+  });
+
+  it("reviews an exact dynamic read-only request with the configured Provider", async () => {
+    process.env.TEST_REVIEW_KEY = "secret";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      output_text: JSON.stringify({
+        schema_version: 1,
+        approved: true,
+        reason: "A public service health check is relevant.",
+      }),
+    }), { status: 200, headers: { "content-type": "application/json" } })));
+    const result = await reviewExactNetworkRequest(issueFixture, provider(), {
+      method: "HEAD",
+      url: "https://status.example.com/health",
+    });
+    expect(result).toEqual({ approved: true, reason: "A public service health check is relevant." });
   });
 });

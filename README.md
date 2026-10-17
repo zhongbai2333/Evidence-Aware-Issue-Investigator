@@ -105,7 +105,7 @@ investigation:
 
 The same engine can therefore use an official model, a compatible commercial model, an internal gateway, or a local endpoint without changing the investigation pipeline.
 
-For Codex, `investigation.approvalMode: auto-review` keeps the investigation Agent offline and asks a separate controller-side Reviewer whether each exact public `github.com/user-attachments/files/...` download is relevant and safe. Approved files are downloaded by the controller with HTTPS host, redirect, count, and size limits, then copied into the disposable workspace. The Reviewer uses the selected Responses-compatible Provider/model, so an OpenAI account is not required. Keep `investigation.network: false`; Auto-review fails closed and never grants the Agent arbitrary network access.
+For Codex, `investigation.approvalMode: auto-review` keeps the investigation Agent offline while enabling two reviewed evidence paths. Public `github.com/user-attachments/files/...` candidates are reviewed and staged before the run. During the run, the Agent may use the injected `eai-fetch` client to propose an exact public HTTPS `GET` or `HEAD`; the controller asks the selected Responses-compatible Provider/model to review every request and redirect before fetching it. The controller blocks credentials, private/metadata addresses, non-443 ports, request bodies, and excessive requests or responses. An OpenAI account is not required. Keep `investigation.network: false`; this is reviewed, brokered evidence retrieval—not unrestricted Agent network access.
 
 The workflow can switch at runtime too:
 

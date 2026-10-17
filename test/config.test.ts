@@ -83,6 +83,8 @@ describe("loadConfig", () => {
       },
     });
     expect(configured.investigation.approvalMode).toBe("auto-review");
+    expect(configured.investigation.reviewedNetworkMaxRequests).toBe(8);
+    expect(configured.investigation.reviewedNetworkMaxResponseBytes).toBe(2 * 1024 * 1024);
 
     expect(() => configSchema.parse({
       investigation: {

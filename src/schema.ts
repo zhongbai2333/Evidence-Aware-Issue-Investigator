@@ -48,6 +48,8 @@ const investigationSchema = z
     workspace: z.enum(["read-only", "workspace-write"]).default("workspace-write"),
     approvalMode: z.enum(["never", "auto-review"]).default("never"),
     network: z.boolean().default(false),
+    reviewedNetworkMaxRequests: z.number().int().min(1).max(25).default(8),
+    reviewedNetworkMaxResponseBytes: z.number().int().min(1024).max(10 * 1024 * 1024).default(2 * 1024 * 1024),
     allowUnsafeCredentialInheritance: z.boolean().default(false),
   })
   .superRefine((investigation, context) => {
@@ -79,6 +81,8 @@ const investigationSchema = z
     workspace: "workspace-write",
     approvalMode: "never",
     network: false,
+    reviewedNetworkMaxRequests: 8,
+    reviewedNetworkMaxResponseBytes: 2 * 1024 * 1024,
     allowUnsafeCredentialInheritance: false,
   });
 
@@ -221,6 +225,8 @@ export const configSchema = z
       workspace: "workspace-write",
       approvalMode: "never",
       network: false,
+      reviewedNetworkMaxRequests: 8,
+      reviewedNetworkMaxResponseBytes: 2 * 1024 * 1024,
       allowUnsafeCredentialInheritance: false,
     },
     labels: {

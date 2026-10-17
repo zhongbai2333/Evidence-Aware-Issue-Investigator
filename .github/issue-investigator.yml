@@ -31,6 +31,8 @@ investigation:
   # Review exact public Issue attachments in the controller; keep the investigation Agent offline.
   approvalMode: auto-review
   network: false
+  reviewedNetworkMaxRequests: 8
+  reviewedNetworkMaxResponseBytes: 2097152
 
 evidencePolicy:
   unreproducedMaxPriority: medium

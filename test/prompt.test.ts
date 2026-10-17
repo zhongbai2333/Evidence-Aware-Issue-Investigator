@@ -23,9 +23,11 @@ describe("buildInvestigationPrompt", () => {
         status: "completed",
         summary: "One relevant log was approved.",
         attachments: [{ path: ".issue-investigator/attachments/attachment-1-log.zip", filename: "log.zip", bytes: 42, sha256: "abc" }],
+        reviewedEgressAvailable: true,
       },
     });
     expect(prompt).toContain(".issue-investigator/attachments/attachment-1-log.zip");
     expect(prompt).toContain("never attempt to bypass the network boundary");
+    expect(prompt).toContain("eai-fetch.mjs");
   });
 });
