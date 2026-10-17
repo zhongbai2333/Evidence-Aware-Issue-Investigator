@@ -5,9 +5,14 @@ RUN apt-get update && apt-get install --yes --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=rust /usr/local/rustup /opt/rustup
 COPY --from=rust /usr/local/cargo/bin /usr/local/bin
+# Codex's core shell environment omits RUSTUP_HOME. Resolve immutable toolchain binaries
+# at build time so ordinary cargo/rustc work without rustup settings in the disposable HOME.
+RUN set -- /opt/rustup/toolchains/* && test "$#" -eq 1 \
+    && for tool in cargo rustc rustdoc; do ln -sf "$1/bin/$tool" "/usr/local/bin/$tool"; done
 ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/work/cargo
 ARG CODEX_VERSION=0.163.0
 RUN npm install --global @openai/codex@${CODEX_VERSION} && npm cache clean --force
 USER 1000:1000
+RUN env -u RUSTUP_HOME -u CARGO_HOME cargo --version && env -u RUSTUP_HOME -u CARGO_HOME rustc --version
 WORKDIR /work
 CMD ["sleep", "infinity"]
