@@ -78,6 +78,7 @@ export class CodexAdapter implements AgentAdapter {
       ...cli.prefix,
       "exec",
       "--ephemeral",
+      "--skip-git-repo-check",
       "--json",
       "--sandbox",
       config.investigation.workspace,
