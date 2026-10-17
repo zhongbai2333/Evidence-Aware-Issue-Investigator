@@ -56,6 +56,7 @@ describe("agent adapters", () => {
     const config = invocation.generatedFiles["codex-home/config.toml"];
     expect(invocation.command).toBe("codex");
     expect(invocation.args).toContain("--output-schema");
+    expect(invocation.args).toContain("--skip-git-repo-check");
     expect(invocation.args).not.toContain("--ask-for-approval");
     expect(config).toContain('model = "coder-small"');
     expect(config).toContain('approval_policy = "never"');
