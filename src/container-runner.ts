@@ -145,17 +145,20 @@ export async function runContainerAgent(plan: AgentInvocationPlan): Promise<Agen
     const result = await execute("docker", ["exec", "--workdir", `${SESSION}/workspace`, ...envArgs,
       name, plan.command, ...plan.args.map(substitute)], plan.timeoutMs);
     // Revoke all model access and kill agent background processes before processing its results.
+    const proxyStats = proxy.stats();
     await proxy.close(); proxy = null;
     if (result.code !== 0) {
       const diagnostic = (text: string, size: number) => screenText(text, [...secrets, variables.proxyToken!])
         .replace(/(?:https?|wss?):\/\/\S+/gi, "[redacted-url]").slice(-size);
-      throw new Error(`Isolated agent failed (${result.code}): stdout=${diagnostic(result.stdout, 3000)} stderr=${diagnostic(result.stderr, 1000)}`);
+      throw new Error(`Isolated agent failed (${result.code}); proxy=${JSON.stringify(proxyStats)}: stdout=${diagnostic(result.stdout, 3000)} stderr=${diagnostic(result.stderr, 1000)}`);
     }
     // Read a single bounded regular file through a trusted image executable, never docker-cp or a host bind mount.
     const readResult = await execute("docker", ["exec", name, "/usr/local/bin/node", "--input-type=module", "-e",
       `import fs from 'node:fs'; const fd=fs.openSync('${SESSION}/report.json',fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW); const s=fs.fstatSync(fd); if(!s.isFile()||s.size>262144)process.exit(2); const b=Buffer.alloc(262145);const n=fs.readSync(fd,b,0,b.length,0);if(n>262144)process.exit(2); process.stdout.write(b.subarray(0,n));`]);
     await checked("docker", ["kill", name]);
     const report = investigationReportSchema.parse(normalizeAgentOutput(plan.engine, readResult.code === 0 ? readResult.stdout : result.stdout));
+    report.evidence.observations = report.evidence.observations.slice(0,99);
+    report.evidence.observations.push(`Controller model proxy: ${proxyStats.forwarded} upstream request(s), ${proxyStats.budgetDenied} budget denial(s), ${proxyStats.upstreamRateLimited} upstream rate-limit response(s).`);
     // JSONL is executor telemetry, not independent proof that the untrusted executor's conclusions are correct.
     return { report, exitCode: result.code, stdout: "", stderr: "", workspaceChanges: [],
       observedCommands: parseObservedCommands(plan.engine, screenText(result.stdout, [...secrets, variables.proxyToken!])).slice(0, 100),

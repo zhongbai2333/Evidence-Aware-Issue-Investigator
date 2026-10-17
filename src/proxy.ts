@@ -28,6 +28,7 @@ function clientExecutedTool(value: unknown, depth = 0): boolean {
 export interface CredentialProxyHandle {
   baseUrl: string;
   token: string;
+  stats(): { requests: number; forwarded: number; budgetDenied: number; upstreamRateLimited: number };
   close(): Promise<void>;
 }
 
@@ -94,6 +95,7 @@ export async function startCredentialProxy(
   }
   const token = randomBytes(32).toString("base64url");
   let requests = 0;
+  let forwarded = 0, budgetDenied = 0, upstreamRateLimited = 0;
   const shutdown = new AbortController();
   const additionalHeaders: Record<string, string> = {};
   for (const [header, envName] of Object.entries(spec.headersFromEnv)) {
@@ -109,6 +111,7 @@ export async function startCredentialProxy(
     try {
       requests += 1;
       if (requests > spec.maxRequests) {
+        budgetDenied++;
         response.writeHead(429).end("Credential proxy request limit exceeded");
         return;
       }
@@ -142,8 +145,16 @@ export async function startCredentialProxy(
         );
         payload.store = false;
         payload.background = false;
+        const remaining = spec.maxRequests - requests;
+        if (remaining <= 10) {
+          const input = Array.isArray(payload.input) ? payload.input :
+            typeof payload.input === "string" ? [{role:"user",content:payload.input}] : [];
+          payload.input = [...input, {role:"developer",content:
+            `Controller budget: ${remaining} model requests remain after this response. Finish the structured report before the hard limit. Prioritize existing evidence and explicit limitations. When fewer than 3 requests remain, do not start more tools; return the final report now.`}];
+        }
         body = JSON.stringify(payload);
       }
+      forwarded++;
       const upstream = await fetch(upstreamUrl(spec.upstreamBaseUrl, requestUrl), {
         method: request.method,
         headers: injectedHeaders(request, spec.protocol, secret, additionalHeaders),
@@ -151,6 +162,7 @@ export async function startCredentialProxy(
         redirect: "error",
         signal: AbortSignal.any([shutdown.signal, AbortSignal.timeout(120_000)]),
       });
+      if (upstream.status === 429) upstreamRateLimited++;
       response.statusCode = upstream.status;
       for (const name of ["content-type", "cache-control", "x-request-id", "request-id"]) {
         const value = upstream.headers.get(name);
@@ -181,6 +193,7 @@ export async function startCredentialProxy(
   return {
     baseUrl: `http://${bindAddress}:${address.port}`,
     token,
+    stats: () => ({ requests, forwarded, budgetDenied, upstreamRateLimited }),
     close: async () => await new Promise<void>((resolve, reject) => {
       shutdown.abort();
       server.close((error) => error ? reject(error) : resolve());
