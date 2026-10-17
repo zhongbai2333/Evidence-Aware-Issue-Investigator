@@ -18,6 +18,7 @@ describe.skipIf(!enabled)("real Linux container boundary", () => {
     const hostSecret = path.join(os.tmpdir(), "eai-host-secret-" + Date.now());
     let upstreamKey = "", upstreamTokens = 0, hostHits = 0;
     let streamingReport: object | null = null;
+    let unstructured = false;
     let realCliToolTypes: string[] = [];
     const upstream = http.createServer(async (req, res) => {
       upstreamKey = String(req.headers.authorization);
@@ -25,8 +26,12 @@ describe.skipIf(!enabled)("real Linux container boundary", () => {
       const payload = JSON.parse(body);
       upstreamTokens = payload.max_output_tokens;
       if (streamingReport) {
+        if (payload.stream === false) {
+          res.setHeader("content-type","application/json");
+          res.end(JSON.stringify({output_text:JSON.stringify(streamingReport)})); return;
+        }
         realCliToolTypes = (payload.tools ?? []).map((tool: {type:string}) => tool.type);
-        const text = JSON.stringify(streamingReport);
+        const text = unstructured ? "The source inspection was completed. Runtime reproduction remains inconclusive. No host data was accessed." : JSON.stringify(streamingReport);
         const item = { id: "msg_eai", type: "message", status: "completed", role: "assistant", content: [{type:"output_text",text,annotations:[]}] };
         const response = { id: "resp_eai", object: "response", created_at: Math.floor(Date.now()/1000), status: "completed", model: "test-model", output:[item], usage:{input_tokens:1,output_tokens:1,total_tokens:2} };
         const events = [
@@ -103,6 +108,12 @@ describe.skipIf(!enabled)("real Linux container boundary", () => {
         prompt:"Return a short investigation report in the requested JSON schema for this mock test. Do not call tools.",workspace}));
       expect(realCliResult.report.investigation.status).toBe("completed");
       expect(realCliToolTypes.length).toBeGreaterThan(0);
+      unstructured=true;
+      const repaired=await runAgent(planAgentInvocation({config,providerName:"mock",provider:config.providers.mock!,
+        prompt:"Return the requested mock report without tools.",workspace}));
+      expect(repaired.report.reproduction.status).toBe("inconclusive");
+      expect(repaired.report.assessment.confidence).toBeLessThanOrEqual(0.7);
+      expect(repaired.report.assessment.limitations.join(" ")).toContain("reformatted an unstructured executor answer");
       await expect(runAgent({ ...plan, command: "/usr/local/bin/node", args: ["-e", "setInterval(()=>{},1000)"], timeoutMs: 500 })).rejects.toThrow("time budget");
       expect(execFileSync("docker", ["ps", "-aq", "--filter", "name=eai-"], { encoding: "utf8" }).trim()).toBe("");
       expect(execFileSync("docker", ["network", "ls", "--format", "{{.Name}}", "--filter", "name=eai-"], { encoding: "utf8" }).trim()).toBe("");

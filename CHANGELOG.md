@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserve explicit boundary-phase errors, retry malformed controller JSON once without retrying valid rejections, conservatively format unstructured executor reports, and bound normalized telemetry to the publication schema.
+
 - Warn the executor before its hard model-request budget is exhausted; distinguish controller budget denials from upstream rate limiting in sanitized runtime evidence.
 
 - Exercise the actual pinned Codex CLI against a streaming mock provider inside the executor; preserve redacted JSONL failure diagnostics and allow client-executed namespaced tools through the model proxy.

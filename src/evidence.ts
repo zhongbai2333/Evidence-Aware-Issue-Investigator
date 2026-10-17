@@ -143,5 +143,13 @@ export function normalizeEvidence(
   }
   report.assessment.limitations = [...new Set(report.assessment.limitations)];
   redactReportEndpointUrls(report);
+  // Controller metadata and real tool output must remain valid under the publication schema too.
+  const bounded = (value: string, max: number) => value.length > max ? `${value.slice(0,max-14)}… [truncated]` : value;
+  report.investigation.summary = bounded(report.investigation.summary,4000);
+  report.evidence.commands = report.evidence.commands.slice(0,100).map((entry) => ({
+    ...entry,command:bounded(entry.command,2000),observation:bounded(entry.observation,4000),
+  }));
+  report.evidence.observations = report.evidence.observations.slice(0,100).map((text)=>bounded(text,1000));
+  report.assessment.limitations = report.assessment.limitations.slice(0,30).map((text)=>bounded(text,1000));
   return report;
 }
