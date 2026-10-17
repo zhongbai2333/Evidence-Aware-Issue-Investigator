@@ -135,6 +135,14 @@ function substitute(value: string, variables: Record<string, string>): string {
   );
 }
 
+function sanitizeDiagnosticOutput(value: string, maxChars: number): string {
+  const redacted = value
+    .replace(/https?:\/\/[^\s"'<>)}\]]+/gi, "[redacted-url]")
+    .replace(/(authorization\s*[:=]\s*bearer\s+)[^\s"']+/gi, "$1[redacted]")
+    .trim();
+  return redacted.slice(-maxChars);
+}
+
 function assertGeneratedPath(tempDir: string, relativePath: string): string {
   const absolute = path.resolve(tempDir, relativePath);
   const relative = path.relative(tempDir, absolute);
@@ -322,7 +330,13 @@ export async function runAgent(plan: AgentInvocationPlan): Promise<AgentRunResul
     });
 
     if (exitCode !== 0) {
-      throw new Error(`Agent exited with code ${exitCode}: ${stderr.slice(-2000)}`);
+      const stdoutTail = sanitizeDiagnosticOutput(stdout, 3000);
+      const stderrTail = sanitizeDiagnosticOutput(stderr, 2000);
+      throw new Error([
+        `Agent exited with code ${exitCode}.`,
+        stdoutTail ? `stdout tail:\n${stdoutTail}` : "stdout tail: (empty)",
+        stderrTail ? `stderr tail:\n${stderrTail}` : "stderr tail: (empty)",
+      ].join("\n"));
     }
 
     let resultText = stdout;
