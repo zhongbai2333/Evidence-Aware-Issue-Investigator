@@ -46,8 +46,14 @@ concurrency:
 jobs:
   investigate:
     if: github.event_name != 'issue_comment' || github.event.issue.pull_request == null
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
+      - name: Set up the Codex sandbox
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap apparmor-profiles
+          sudo apparmor_parser -r /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
+
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
@@ -63,6 +69,8 @@ jobs:
 ```
 
 See [the example configuration](examples/issue-investigator.yml), [architecture](docs/ARCHITECTURE.md), and [security model](SECURITY.md).
+
+The Ubuntu setup step is required for Bubblewrap-backed Codex sandboxes on GitHub-hosted Ubuntu 24.04 runners. It loads Ubuntu's targeted `bwrap-userns-restrict` AppArmor profile; do not work around sandbox startup failures by disabling the Codex sandbox.
 
 ## Model switching
 

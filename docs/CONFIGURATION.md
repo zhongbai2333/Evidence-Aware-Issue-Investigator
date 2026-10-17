@@ -134,3 +134,17 @@ Confirm is accepted only from an actor with `triage`, `write`, `maintain`, or `a
 - `execution-mode`
 
 The last four values override the validated configuration for one run. Base URL, credentials, commands, and permission policy cannot be overridden from Issue text.
+
+## Ubuntu Codex sandbox prerequisite
+
+Codex uses Bubblewrap for its Linux filesystem and network sandbox. On a GitHub-hosted Ubuntu 24.04 runner, load Ubuntu's targeted AppArmor profile before invoking this Action:
+
+```yaml
+- name: Set up the Codex sandbox
+  run: |
+    sudo apt-get update
+    sudo apt-get install --yes bubblewrap apparmor-profiles
+    sudo apparmor_parser -r /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
+```
+
+Without this prerequisite, every Agent shell command can fail before execution with `bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`. Keep the Codex sandbox enabled; do not replace this setup with `danger-full-access` or a sandbox bypass.
