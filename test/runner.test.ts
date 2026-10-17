@@ -136,6 +136,26 @@ describe("runAgent", () => {
     expect(result.observedCommands).toEqual([{ command: "cargo test", exitCode: 0, observation: "12 passed" }]);
   });
 
+  it("recovers a structured report from the final Codex JSONL agent message", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "investigator-runner-"));
+    tempDirectories.push(workspace);
+    await writeFile(
+      path.join(workspace, "mock-codex.mjs"),
+      [
+        'process.stdout.write(JSON.stringify({type:"thread.started",thread_id:"test"})+"\\n");',
+        `process.stdout.write(JSON.stringify({type:"item.completed",item:{type:"agent_message",text:${JSON.stringify(JSON.stringify(validReport()))}}})+"\\n");`,
+      ].join("\n"),
+    );
+    const plan = customPlan(workspace);
+    plan.engine = "codex";
+    plan.args = ["{workspace}/mock-codex.mjs"];
+    plan.outputFormat = "jsonl";
+
+    const result = await runAgent(plan);
+    expect(result.report.investigation.status).toBe("completed");
+    expect(result.report.assessment.type).toBe("bug");
+  });
+
   it("gives the agent only an ephemeral proxy token while the upstream receives the real key", async () => {
     let upstreamAuthorization = "";
     const upstream = http.createServer((request, response) => {

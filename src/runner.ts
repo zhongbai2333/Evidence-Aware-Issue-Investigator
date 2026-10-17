@@ -183,7 +183,29 @@ function parseJsonCandidate(raw: string): unknown {
 }
 
 function normalizeAgentOutput(engine: AgentInvocationPlan["engine"], raw: string): unknown {
-  const parsed = parseJsonCandidate(raw);
+  let parsed: unknown;
+  try {
+    parsed = parseJsonCandidate(raw);
+  } catch (directError) {
+    if (engine !== "codex") throw directError;
+    let finalMessage: string | null = null;
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line.trim().startsWith("{")) continue;
+      try {
+        const event = JSON.parse(line) as {
+          type?: string;
+          item?: { type?: string; text?: string };
+        };
+        if (event.type === "item.completed" && event.item?.type === "agent_message" && event.item.text) {
+          finalMessage = event.item.text;
+        }
+      } catch {
+        // Ignore non-JSON diagnostic lines.
+      }
+    }
+    if (!finalMessage) throw directError;
+    parsed = parseJsonCandidate(finalMessage);
+  }
   if (engine === "claude" && parsed && typeof parsed === "object") {
     const envelope = parsed as { structured_output?: unknown; result?: unknown };
     return envelope.structured_output ?? envelope.result ?? envelope;
@@ -341,12 +363,23 @@ export async function runAgent(plan: AgentInvocationPlan): Promise<AgentRunResul
 
     let resultText = stdout;
     try {
-      resultText = await readFile(outputPath, "utf8");
+      const outputFileText = await readFile(outputPath, "utf8");
+      if (outputFileText.trim()) resultText = outputFileText;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
 
-    const report = investigationReportSchema.parse(normalizeAgentOutput(plan.engine, resultText));
+    let report: ValidatedInvestigationReport;
+    try {
+      report = investigationReportSchema.parse(normalizeAgentOutput(plan.engine, resultText));
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error([
+        `Agent result validation failed: ${reason}`,
+        `stdout tail:\n${sanitizeDiagnosticOutput(stdout, 4000) || "(empty)"}`,
+        `stderr tail:\n${sanitizeDiagnosticOutput(stderr, 2000) || "(empty)"}`,
+      ].join("\n"));
+    }
     const afterManifest = await collectWorkspaceManifest(agentWorkspace);
     return {
       report,
