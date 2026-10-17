@@ -1,8 +1,8 @@
 import dns from "node:dns/promises";
-import http from "node:http";
 import https from "node:https";
 import net from "node:net";
-import { chmod, rm } from "node:fs/promises";
+import path from "node:path";
+import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { z } from "zod";
 import type { IssueSnapshot } from "./contracts";
 import { reviewExactNetworkRequest } from "./network-review";
@@ -26,7 +26,7 @@ export interface ReviewedEgressAudit {
 }
 
 export interface ReviewedEgressBrokerConfig {
-  socketPath: string;
+  queueDirectory: string;
   issue: IssueSnapshot;
   provider: ProviderConfig;
   maxRequests: number;
@@ -179,22 +179,6 @@ async function requestPublicUrl(
   });
 }
 
-async function readRequestBody(request: http.IncomingMessage): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  let bytes = 0;
-  for await (const chunk of request) {
-    bytes += chunk.byteLength;
-    if (bytes > MAX_REQUEST_MESSAGE_BYTES) throw new Error("Reviewed egress request message is too large");
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks);
-}
-
-function reply(response: http.ServerResponse, status: number, body: object): void {
-  response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
-  response.end(JSON.stringify(body));
-}
-
 export async function startReviewedEgressBroker(
   config: ReviewedEgressBrokerConfig,
   dependencies: ReviewedEgressBrokerDependencies = {},
@@ -203,20 +187,35 @@ export async function startReviewedEgressBroker(
   const requestUrl = dependencies.requestUrl ?? requestPublicUrl;
   let requestCount = 0;
   const audits: ReviewedEgressAudit[] = [];
-  await rm(config.socketPath, { force: true });
-  const server = http.createServer(async (request, response) => {
+  const requestsDirectory = path.join(config.queueDirectory, "requests");
+  const processingDirectory = path.join(config.queueDirectory, "processing");
+  const responsesDirectory = path.join(config.queueDirectory, "responses");
+  await rm(config.queueDirectory, { recursive: true, force: true });
+  await Promise.all([
+    mkdir(requestsDirectory, { recursive: true, mode: 0o700 }),
+    mkdir(processingDirectory, { recursive: true, mode: 0o700 }),
+    mkdir(responsesDirectory, { recursive: true, mode: 0o700 }),
+  ]);
+
+  async function writeResponse(requestId: string, body: object): Promise<void> {
+    const temporary = path.join(responsesDirectory, `.${requestId}.${process.pid}.tmp`);
+    const destination = path.join(responsesDirectory, `${requestId}.json`);
+    await writeFile(temporary, JSON.stringify(body), { encoding: "utf8", mode: 0o600 });
+    await rename(temporary, destination);
+  }
+
+  async function processRequest(requestId: string, requestPath: string): Promise<void> {
     const id = `network-${requestCount + 1}`;
     try {
-      if (request.method !== "POST" || request.url !== "/fetch") {
-        reply(response, 404, { error: "not-found" });
-        return;
-      }
+      const metadata = await lstat(requestPath);
+      if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error("Reviewed egress request is not a regular file");
+      if (metadata.size > MAX_REQUEST_MESSAGE_BYTES) throw new Error("Reviewed egress request message is too large");
       requestCount += 1;
       if (requestCount > config.maxRequests) {
-        reply(response, 429, { error: "reviewed-egress-request-limit" });
+        await writeResponse(requestId, { approved: false, error: "reviewed-egress-request-limit" });
         return;
       }
-      const proposed = brokerRequestSchema.parse(JSON.parse((await readRequestBody(request)).toString("utf8")));
+      const proposed = brokerRequestSchema.parse(JSON.parse(await readFile(requestPath, "utf8")));
       let current = validateReviewedEgressUrl(proposed.url);
       const audit: ReviewedEgressAudit = {
         id,
@@ -235,7 +234,7 @@ export async function startReviewedEgressBroker(
         audit.reason = review.reason;
         if (!review.approved) {
           process.stdout.write(`Controller Auto-review denied ${id}: ${redactUrls(review.reason)}\n`);
-          reply(response, 403, { id, approved: false, reason: review.reason });
+          await writeResponse(requestId, { id, approved: false, reason: review.reason });
           return;
         }
         audit.approved = true;
@@ -252,7 +251,7 @@ export async function startReviewedEgressBroker(
         audit.statusCode = upstream.statusCode;
         audit.bytes = upstream.body.byteLength;
         process.stdout.write(`Controller Auto-review approved ${id}; upstream status=${upstream.statusCode}; response_bytes=${upstream.body.byteLength}\n`);
-        reply(response, 200, {
+        await writeResponse(requestId, {
           id,
           approved: true,
           reason: review.reason,
@@ -267,29 +266,54 @@ export async function startReviewedEgressBroker(
     } catch (error) {
       const message = redactUrls(error instanceof Error ? error.message : String(error));
       process.stdout.write(`Controller reviewed egress ${id} failed closed: ${message}\n`);
-      reply(response, 400, { id, approved: false, error: message });
+      await writeResponse(requestId, { id, approved: false, error: message });
+    } finally {
+      await rm(requestPath, { force: true });
     }
-  });
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(config.socketPath, () => {
-      server.off("error", reject);
-      resolve();
-    });
-  });
-  await chmod(config.socketPath, 0o600);
+  }
+
+  let stopped = false;
+  let timer: NodeJS.Timeout | null = null;
+  let currentScan = Promise.resolve();
+  const scan = async (): Promise<void> => {
+    const names = (await readdir(requestsDirectory)).filter((name) => /^[0-9a-f-]{36}\.json$/.test(name)).sort();
+    for (const name of names) {
+      const requestId = name.slice(0, -5);
+      const source = path.join(requestsDirectory, name);
+      const claimed = path.join(processingDirectory, name);
+      try {
+        await rename(source, claimed);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+        throw error;
+      }
+      await processRequest(requestId, claimed);
+    }
+  };
+  const schedule = (): void => {
+    timer = setTimeout(() => {
+      currentScan = scan()
+        .catch((error) => {
+          process.stdout.write(`Controller reviewed egress queue scan failed closed: ${redactUrls(error instanceof Error ? error.message : String(error))}\n`);
+        })
+        .finally(() => { if (!stopped) schedule(); });
+    }, 50);
+  };
+  schedule();
   return {
     audits,
     async close() {
-      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-      await rm(config.socketPath, { force: true });
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      await currentScan;
+      await rm(config.queueDirectory, { recursive: true, force: true });
     },
   };
 }
 
 export const REVIEWED_EGRESS_CLIENT = String.raw`#!/usr/bin/env node
-import http from "node:http";
-import { mkdir, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const args = process.argv.slice(2);
@@ -305,37 +329,47 @@ if (!url || !["GET", "HEAD"].includes(method)) {
   process.stderr.write("Usage: node .issue-investigator/bin/eai-fetch.mjs --url <https-url> [--method GET|HEAD] [--output relative-path]\n");
   process.exit(2);
 }
-const socketPath = path.resolve(".issue-investigator/reviewed-egress.sock");
+const queueDirectory = path.resolve(".issue-investigator/reviewed-egress");
+const requestsDirectory = path.join(queueDirectory, "requests");
+const responsesDirectory = path.join(queueDirectory, "responses");
+const requestId = randomUUID();
+const requestPath = path.join(requestsDirectory, requestId + ".json");
+const temporaryPath = path.join(requestsDirectory, "." + requestId + ".tmp");
+const responsePath = path.join(responsesDirectory, requestId + ".json");
 const payload = JSON.stringify({ method, url });
-const result = await new Promise((resolve, reject) => {
-  const request = http.request({ socketPath, path: "/fetch", method: "POST", headers: { "content-type": "application/json", "content-length": Buffer.byteLength(payload) } }, (response) => {
-    const chunks = [];
-    response.on("data", (chunk) => chunks.push(chunk));
-    response.on("end", () => {
-      try { resolve({ statusCode: response.statusCode, body: JSON.parse(Buffer.concat(chunks).toString("utf8")) }); }
-      catch (error) { reject(error); }
-    });
-  });
-  request.once("error", reject);
-  request.end(payload);
-});
-if (result.statusCode !== 200 || !result.body.approved) {
-  process.stderr.write(JSON.stringify(result.body) + "\n");
+await mkdir(requestsDirectory, { recursive: true });
+await writeFile(temporaryPath, payload, { encoding: "utf8", mode: 0o600 });
+await rename(temporaryPath, requestPath);
+let result = null;
+const deadline = Date.now() + 120_000;
+while (Date.now() < deadline) {
+  try {
+    result = JSON.parse(await readFile(responsePath, "utf8"));
+    await rm(responsePath, { force: true });
+    break;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+if (!result) throw new Error("Reviewed egress controller response timed out");
+if (!result.approved) {
+  process.stderr.write(JSON.stringify(result) + "\n");
   process.exit(3);
 }
-const body = Buffer.from(result.body.body_base64 || "", "base64");
-delete result.body.body_base64;
+const body = Buffer.from(result.body_base64 || "", "base64");
+delete result.body_base64;
 if (output) {
   const absolute = path.resolve(output);
   const relative = path.relative(process.cwd(), absolute);
   if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Output path escapes the disposable workspace");
   await mkdir(path.dirname(absolute), { recursive: true });
   await writeFile(absolute, body);
-  result.body.saved_to = relative;
-} else if (/^(text\/|application\/(json|xml|javascript)|[^;]+\+json)/i.test(result.body.content_type || "")) {
-  result.body.body_text = body.toString("utf8");
+  result.saved_to = relative;
+} else if (/^(text\/|application\/(json|xml|javascript)|[^;]+\+json)/i.test(result.content_type || "")) {
+  result.body_text = body.toString("utf8");
 } else if (body.length) {
-  result.body.note = "Binary response omitted; repeat with --output <relative-path>.";
+  result.note = "Binary response omitted; repeat with --output <relative-path>.";
 }
-process.stdout.write(JSON.stringify(result.body, null, 2) + "\n");
+process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 `;

@@ -10,7 +10,7 @@
 6. Copy source into a filtered `.git`-less disposable workspace.
 7. Start a short-lived credential proxy when environment authentication is configured.
 8. Optionally let a controller-side Reviewer approve exact public Issue attachments, download approved files through a narrow allowlist, and seed them into the disposable workspace.
-9. Start a filesystem-socket egress broker when Auto-review is enabled. It reviews and validates every proposed public HTTPS `GET`/`HEAD` and redirect while the Agent's direct network remains disabled.
+9. Start a controller-polled filesystem-queue egress broker when Auto-review is enabled. It reviews and validates every proposed public HTTPS `GET`/`HEAD` and redirect while the Agent's direct network remains disabled.
 10. Run the investigation Agent offline with bounded time/output and a strict output Schema.
 11. Capture controller-observable CLI events, reviewed-request audit counts, and workspace changes.
 12. Optionally run one Agent-requested, controller-approved probe on another clean copy.
