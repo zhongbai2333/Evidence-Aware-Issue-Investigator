@@ -10,15 +10,13 @@ function renderProviderConfig(
   providerName: string,
   provider: ProviderConfig,
   network: boolean,
-  approvalMode: "never" | "auto-review",
+  _approvalMode: "never" | "auto-review",
   baseUrlOverride: string | null,
   envKeyOverride: string | null,
 ): string {
-  const autoReview = approvalMode === "auto-review";
   const lines = [
     `model = ${tomlString(provider.model)}`,
-    `approval_policy = "${autoReview ? "on-request" : "never"}"`,
-    ...(autoReview ? ['approvals_reviewer = "auto_review"'] : []),
+    'approval_policy = "never"',
     'web_search = "disabled"',
     'sandbox_mode = "workspace-write"',
     "allow_login_shell = false",

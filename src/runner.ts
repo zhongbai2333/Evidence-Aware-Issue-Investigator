@@ -292,6 +292,15 @@ export async function runAgent(plan: AgentInvocationPlan): Promise<AgentRunResul
       proxyToken: proxy?.token ?? "",
     };
     await copyDisposableWorkspace(plan.cwd, agentWorkspace);
+    for (const [relativePath, content] of Object.entries(plan.workspaceFiles ?? {})) {
+      const absolutePath = path.resolve(agentWorkspace, relativePath);
+      const relative = path.relative(agentWorkspace, absolutePath);
+      if (relative.startsWith("..") || path.isAbsolute(relative)) {
+        throw new Error(`Workspace seed file escapes temporary directory: ${relativePath}`);
+      }
+      await mkdir(path.dirname(absolutePath), { recursive: true });
+      await writeFile(absolutePath, content);
+    }
     const beforeManifest = await collectWorkspaceManifest(agentWorkspace);
     const isolatedHome = path.join(tempDir, "home");
     await mkdir(isolatedHome, { recursive: true });

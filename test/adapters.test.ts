@@ -69,7 +69,7 @@ describe("agent adapters", () => {
     expect(config).toContain("ignore_default_excludes = false");
   });
 
-  it("routes Codex boundary escalations through provider-neutral auto-review", () => {
+  it("keeps the investigation Agent offline when controller Auto-review is enabled", () => {
     const config = makeConfig("codex");
     config.investigation.approvalMode = "auto-review";
     const resolved = resolveProvider(config);
@@ -81,8 +81,8 @@ describe("agent adapters", () => {
       workspace: "/workspace",
     });
     const generated = invocation.generatedFiles["codex-home/config.toml"];
-    expect(generated).toContain('approval_policy = "on-request"');
-    expect(generated).toContain('approvals_reviewer = "auto_review"');
+    expect(generated).toContain('approval_policy = "never"');
+    expect(generated).not.toContain('approvals_reviewer = "auto_review"');
     expect(generated).toContain("network_access = false");
     expect(invocation.credentialProxy?.upstreamBaseUrl).toBe("https://gateway.example/v1");
   });

@@ -117,6 +117,25 @@ describe("runAgent", () => {
     expect(result.observedCommands).toEqual([]);
   });
 
+  it("seeds controller-reviewed files without reporting them as agent changes", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "investigator-runner-"));
+    tempDirectories.push(workspace);
+    await writeFile(
+      path.join(workspace, "mock-agent.mjs"),
+      [
+        'import { readFileSync } from "node:fs";',
+        'if (readFileSync(".issue-investigator/attachments/attachment-1-log.txt", "utf8") !== "reviewed") throw new Error("missing reviewed file");',
+        `process.stdout.write(${JSON.stringify(JSON.stringify(validReport()))});`,
+      ].join("\n"),
+    );
+    const plan = customPlan(workspace);
+    plan.workspaceFiles = {
+      ".issue-investigator/attachments/attachment-1-log.txt": Buffer.from("reviewed"),
+    };
+    const result = await runAgent(plan);
+    expect(result.workspaceChanges).not.toContainEqual(expect.objectContaining({ path: expect.stringContaining("attachment-1") }));
+  });
+
   it("derives Codex command evidence from controller-captured JSONL events", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "investigator-runner-"));
     tempDirectories.push(workspace);

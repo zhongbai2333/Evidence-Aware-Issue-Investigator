@@ -55,9 +55,9 @@ investigation:
 
 `command` and `argsPrefix` may select a trusted preinstalled wrapper. They are configuration, not Issue-controlled input, and are always executed with `shell: false`.
 
-With `approvalMode: auto-review`, Codex keeps `network: false` as the default boundary and sends eligible escalation requests to a separate Reviewer Agent. The Reviewer is invoked through the selected Provider and model, including compatible non-OpenAI Providers. This does not grant unrestricted network access: each blocked request must be proposed, reviewed, and approved. Configuration rejects `auto-review` together with `network: true`, because that would pre-authorize network traffic and bypass the intended review point.
+With `approvalMode: auto-review`, the investigation Agent remains offline. Before it starts, the controller extracts only exact public `github.com/user-attachments/files/...` candidates from the Issue, asks the selected Responses-compatible Provider/model to review each candidate, and downloads approved files into the disposable workspace. Downloads are anonymous, HTTPS-only, restricted to allowlisted GitHub redirect hosts, limited to five files, 10 MiB per file, and 20 MiB total. Reviewer errors fail closed. Configuration rejects `auto-review` together with `network: true`, because that would pre-authorize Agent network traffic and bypass the intended review point.
 
-Auto-review requires the selected model to follow Codex's structured Reviewer protocol. Treat a passing schema/unit test as insufficient; run a live boundary-crossing test for each Provider/model combination before enabling it in production.
+Controller Auto-review currently requires environment authentication and the Responses protocol. It uses the configured Provider/model directly and does not require an OpenAI account. It does not approve arbitrary Agent commands or general URLs. Treat unit tests as insufficient; run a live attachment review and download for each advertised Provider/model combination before enabling it in production.
 
 ## Triage and evidence
 
