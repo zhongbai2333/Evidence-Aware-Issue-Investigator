@@ -197,7 +197,7 @@ async function main(): Promise<void> {
   } else {
     operation = "investigate";
     if (config.investigation.mode === "plan") {
-      const prompt = buildInvestigationPrompt(issue, { duplicateCandidates });
+      const prompt = buildInvestigationPrompt(issue, { duplicateCandidates, isolatedOnline: config.investigation.isolation.executor === "container" });
       const plan = planAgentInvocation({ config, providerName, provider, prompt, workspace });
       assertExecutionSafety(config, provider);
       report = plannedReport(

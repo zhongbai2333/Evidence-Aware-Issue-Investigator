@@ -17,6 +17,14 @@ const ALLOWED_PATHS = [
   "/v1/messages",
 ];
 
+function clientExecutedTool(value: unknown, depth = 0): boolean {
+  if (!value || typeof value !== "object" || depth > 4) return false;
+  const tool = value as { type?: string; tools?: unknown[]; execution?: string };
+  if (tool.type === "function" || tool.type === "custom") return true;
+  if (tool.type === "tool_search") return tool.execution === "client";
+  return tool.type === "namespace" && Array.isArray(tool.tools) && tool.tools.every((entry) => clientExecutedTool(entry, depth + 1));
+}
+
 export interface CredentialProxyHandle {
   baseUrl: string;
   token: string;
@@ -125,7 +133,7 @@ export async function startCredentialProxy(
         }
         const payload = JSON.parse(body) as Record<string, unknown>;
         if (payload.model !== spec.allowedModel ||
-            (Array.isArray(payload.tools) && payload.tools.some((tool) => !["function", "custom"].includes(String(tool?.type))))) {
+            (Array.isArray(payload.tools) && payload.tools.some((tool) => !clientExecutedTool(tool)))) {
           response.writeHead(403).end("Model or hosted tool is outside this investigation"); return;
         }
         payload.max_output_tokens = Math.min(

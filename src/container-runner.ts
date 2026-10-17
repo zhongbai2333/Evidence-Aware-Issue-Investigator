@@ -146,7 +146,11 @@ export async function runContainerAgent(plan: AgentInvocationPlan): Promise<Agen
       name, plan.command, ...plan.args.map(substitute)], plan.timeoutMs);
     // Revoke all model access and kill agent background processes before processing its results.
     await proxy.close(); proxy = null;
-    if (result.code !== 0) throw new Error(`Isolated agent failed (${result.code}): ${screenText(result.stderr, secrets).replace(/(?:https?|wss?):\/\/\S+/gi, "[redacted-url]").slice(-1500)}`);
+    if (result.code !== 0) {
+      const diagnostic = (text: string, size: number) => screenText(text, [...secrets, variables.proxyToken!])
+        .replace(/(?:https?|wss?):\/\/\S+/gi, "[redacted-url]").slice(-size);
+      throw new Error(`Isolated agent failed (${result.code}): stdout=${diagnostic(result.stdout, 3000)} stderr=${diagnostic(result.stderr, 1000)}`);
+    }
     // Read a single bounded regular file through a trusted image executable, never docker-cp or a host bind mount.
     const readResult = await execute("docker", ["exec", name, "/usr/local/bin/node", "--input-type=module", "-e",
       `import fs from 'node:fs'; const fd=fs.openSync('${SESSION}/report.json',fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW); const s=fs.fstatSync(fd); if(!s.isFile()||s.size>262144)process.exit(2); const b=Buffer.alloc(262145);const n=fs.readSync(fd,b,0,b.length,0);if(n>262144)process.exit(2); process.stdout.write(b.subarray(0,n));`]);

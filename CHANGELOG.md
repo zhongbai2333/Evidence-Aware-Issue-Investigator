@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Exercise the actual pinned Codex CLI against a streaming mock provider inside the executor; preserve redacted JSONL failure diagnostics and allow client-executed namespaced tools through the model proxy.
+
 - Add isolated online Codex execution with disposable hardened containers, normal public networking, external credentials/publication, independent input/output reviews and Linux boundary integration tests.
 
 - Initial Node 24 GitHub Action.

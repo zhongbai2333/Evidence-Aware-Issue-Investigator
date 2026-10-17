@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { runAgent } from "../src/runner";
 import { configSchema } from "../src/schema";
 import type { AgentInvocationPlan } from "../src/contracts";
+import { planAgentInvocation } from "../src/adapters";
 
 const image = process.env.EAI_CONTAINER_IMAGE;
 const enabled = process.platform === "linux" && !!image;
@@ -16,10 +17,32 @@ describe.skipIf(!enabled)("real Linux container boundary", () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "eai-boundary-source-"));
     const hostSecret = path.join(os.tmpdir(), "eai-host-secret-" + Date.now());
     let upstreamKey = "", upstreamTokens = 0, hostHits = 0;
+    let streamingReport: object | null = null;
+    let realCliToolTypes: string[] = [];
     const upstream = http.createServer(async (req, res) => {
       upstreamKey = String(req.headers.authorization);
       let body = ""; for await (const chunk of req) body += chunk;
-      upstreamTokens = JSON.parse(body).max_output_tokens;
+      const payload = JSON.parse(body);
+      upstreamTokens = payload.max_output_tokens;
+      if (streamingReport) {
+        realCliToolTypes = (payload.tools ?? []).map((tool: {type:string}) => tool.type);
+        const text = JSON.stringify(streamingReport);
+        const item = { id: "msg_eai", type: "message", status: "completed", role: "assistant", content: [{type:"output_text",text,annotations:[]}] };
+        const response = { id: "resp_eai", object: "response", created_at: Math.floor(Date.now()/1000), status: "completed", model: "test-model", output:[item], usage:{input_tokens:1,output_tokens:1,total_tokens:2} };
+        const events = [
+          {type:"response.created",response:{...response,status:"in_progress",output:[]}},
+          {type:"response.output_item.added",output_index:0,item:{...item,status:"in_progress",content:[]}},
+          {type:"response.content_part.added",item_id:item.id,output_index:0,content_index:0,part:{type:"output_text",text:"",annotations:[]}},
+          {type:"response.output_text.delta",item_id:item.id,output_index:0,content_index:0,delta:text},
+          {type:"response.output_text.done",item_id:item.id,output_index:0,content_index:0,text},
+          {type:"response.content_part.done",item_id:item.id,output_index:0,content_index:0,part:item.content[0]},
+          {type:"response.output_item.done",output_index:0,item},
+          {type:"response.completed",response},
+        ];
+        res.setHeader("content-type","text/event-stream");
+        for (const [sequence_number,event] of events.entries()) res.write(`event: ${event.type}\ndata: ${JSON.stringify({...event,sequence_number})}\n\n`);
+        res.end(); return;
+      }
       res.end('{"ok":true}');
     });
     const hostOnly = http.createServer((req, res) => { hostHits++; res.end("HOST_SECRET"); });
@@ -70,6 +93,16 @@ describe.skipIf(!enabled)("real Linux container boundary", () => {
       expect(upstreamTokens).toBe(8192);
       expect(hostHits).toBe(0);
       expect(await readFile(path.join(workspace, "baseline.txt"), "utf8")).toBe("original");
+      streamingReport = report;
+      const config = configSchema.parse({
+        cli: {install:"preinstalled",versions:{codex:"0.163.0"}},
+        providers: {mock:{model:"test-model",baseUrl:`http://127.0.0.1:${upstreamAddress.port}`,auth:{mode:"environment",env:"TEST_CONTAINER_KEY"}}},
+        investigation:{engine:"codex",provider:"mock",mode:"execute",network:true,isolation:{executor:"container",image}},
+      });
+      const realCliResult = await runAgent(planAgentInvocation({config,providerName:"mock",provider:config.providers.mock!,
+        prompt:"Return a short investigation report in the requested JSON schema for this mock test. Do not call tools.",workspace}));
+      expect(realCliResult.report.investigation.status).toBe("completed");
+      expect(realCliToolTypes.length).toBeGreaterThan(0);
       await expect(runAgent({ ...plan, command: "/usr/local/bin/node", args: ["-e", "setInterval(()=>{},1000)"], timeoutMs: 500 })).rejects.toThrow("time budget");
       expect(execFileSync("docker", ["ps", "-aq", "--filter", "name=eai-"], { encoding: "utf8" }).trim()).toBe("");
       expect(execFileSync("docker", ["network", "ls", "--format", "{{.Name}}", "--filter", "name=eai-"], { encoding: "utf8" }).trim()).toBe("");
