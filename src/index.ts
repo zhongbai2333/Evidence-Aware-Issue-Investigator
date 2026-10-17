@@ -9,7 +9,7 @@ import { planAgentInvocation } from "./adapters";
 import { resolveProvider } from "./adapters/base";
 import { assertExecutionSafety, runAgent } from "./runner";
 import { investigationReportSchema } from "./report";
-import { isInvestigatorComment, renderReportComment } from "./render";
+import { publishReportComment } from "./publish";
 import { searchDuplicateCandidates } from "./duplicates";
 import { normalizeEvidence } from "./evidence";
 import { runReplay } from "./replay";
@@ -76,27 +76,7 @@ function plannedReport(
 
 async function publishComment(token: string, report: InvestigationReport): Promise<void> {
   if (!token) throw new Error("github-token is required when publish-comment=true");
-  const octokit = github.getOctokit(token);
-  const [owner, repo] = report.issue.repository.split("/");
-  if (!owner || !repo) throw new Error(`Invalid repository: ${report.issue.repository}`);
-  const body = renderReportComment(report);
-  const comments = await octokit.paginate(octokit.rest.issues.listComments, {
-    owner,
-    repo,
-    issue_number: report.issue.number,
-    per_page: 100,
-  });
-  const existing = [...comments].reverse().find(
-    (comment) =>
-      isInvestigatorComment(comment.body) &&
-      comment.user?.type === "Bot" &&
-      comment.user?.login === "github-actions[bot]",
-  );
-  if (existing) {
-    await octokit.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-  } else {
-    await octokit.rest.issues.createComment({ owner, repo, issue_number: report.issue.number, body });
-  }
+  await publishReportComment(github.getOctokit(token), report, core.warning);
 }
 
 async function main(): Promise<void> {
