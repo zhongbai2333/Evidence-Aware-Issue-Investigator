@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Publish investigation results as new comments before removing previous valid bot-owned reports, keeping the latest result at the end of the discussion without deleting human comments.
+
 - Make the bundled Rust compiler and Cargo work under Codex's core shell environment without inherited rustup settings; compile and execute a Rust readiness probe in Linux isolation CI.
 
 - Preserve explicit boundary-phase errors, retry malformed controller JSON once without retrying valid rejections, conservatively format unstructured executor reports, and bound normalized telemetry to the publication schema.

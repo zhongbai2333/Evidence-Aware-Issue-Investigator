@@ -17,7 +17,7 @@ The [isolated online executor](ISOLATED-EXECUTION.md) is an alternative to the o
 11. Capture controller-observable CLI events, reviewed-request audit counts, and workspace changes.
 12. Optionally run one Agent-requested, controller-approved probe on another clean copy.
 13. Rebind identity, validate duplicate targets, normalize evidence, and cap priority.
-14. Return outputs and optionally upsert one bot-owned sticky comment.
+14. Return outputs and optionally create a new bot-owned report at the end of the discussion, then remove previous valid bot reports for that Issue. Failed publication preserves previous reports; cleanup failures warn without discarding the new result. Human comments and other bots are never removed.
 15. Apply labels, assignee, or closure only after an authorized maintainer adds Confirm.
 
 ## Separation of concerns

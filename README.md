@@ -25,7 +25,7 @@ Provider and model switching are native features. CCSwitch and similar tools may
 - Codex JSONL command-event capture and controller-observed workspace changes.
 - Strict bounded report Schema, duplicate-target validation, and priority caps for unreproduced reports.
 - Controller-approved probe replay on a second clean copy, optionally in a digest-pinned container.
-- Bot-owned sticky reports plus maintainer Confirm and Needs-Info follow-up state transitions.
+- New reports appear at the end of the discussion; after publication, previous valid reports owned by the bot are removed. Maintainer Confirm and Needs-Info follow-up state transitions remain supported.
 
 ## Example workflow
 
