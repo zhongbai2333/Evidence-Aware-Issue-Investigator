@@ -81,8 +81,6 @@ export class CodexAdapter implements AgentAdapter {
       "--json",
       "--sandbox",
       config.investigation.workspace,
-      "--ask-for-approval",
-      "never",
       "--ignore-rules",
       "--output-schema",
       "{schemaPath}",
