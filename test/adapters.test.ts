@@ -60,6 +60,7 @@ describe("agent adapters", () => {
     expect(invocation.args).not.toContain("--ask-for-approval");
     expect(config).toContain('model = "coder-small"');
     expect(config).toContain('approval_policy = "never"');
+    expect(config).toContain('web_search = "disabled"');
     expect(config).toContain('base_url = "{proxyBaseUrl}"');
     expect(config).toContain('env_key = "ISSUE_INVESTIGATOR_PROXY_TOKEN"');
     expect(invocation.credentialProxy?.upstreamBaseUrl).toBe("https://gateway.example/v1");
