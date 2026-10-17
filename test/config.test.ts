@@ -36,9 +36,9 @@ describe("runtime model switching", () => {
 describe("loadConfig", () => {
   it("validates the repository dogfood configuration", async () => {
     const config = await loadConfig(process.cwd(), ".github/issue-investigator.yml");
-    expect(config.investigation.engine).toBe("dsh");
+    expect(config.investigation.engine).toBe("codex");
     expect(config.investigation.mode).toBe("execute");
-    expect(config.providers.deepseek?.protocol).toBe("chat-completions");
+    expect(config.providers.deepseek?.protocol).toBe("responses");
   });
 
   it("loads named providers and applies safe defaults", async () => {

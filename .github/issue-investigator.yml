@@ -3,14 +3,14 @@ schemaVersion: 1
 cli:
   install: npx
   versions:
-    dsh: 0.1.1-rc.1
+    codex: 0.163.0
 
 providers:
   deepseek:
-    kind: native
+    kind: compatible
     baseUrl: https://api.deepseek.com
-    protocol: chat-completions
-    model: deepseek-chat
+    protocol: responses
+    model: deepseek-v4-pro
     auth:
       mode: environment
       env: DEEPSEEK_API_KEY
@@ -20,7 +20,7 @@ triage:
   maxDuplicateCandidates: 8
 
 investigation:
-  engine: dsh
+  engine: codex
   provider: deepseek
   trigger: label
   triggerLabel: AI-Investigate
@@ -37,7 +37,7 @@ evidencePolicy:
   allowUnreproducedHighImpactPriority: false
 
 mutation:
-  mode: maintainer-confirm
+  mode: suggest
   confirmLabel: Confirm
   rerunLabel: AI-Rerun
   assignConfirmer: true
