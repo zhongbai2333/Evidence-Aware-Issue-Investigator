@@ -1,5 +1,7 @@
 # Architecture
 
+The [isolated online executor](ISOLATED-EXECUTION.md) is an alternative to the offline process/broker path below. Its sequence is: screen input → create an unprivileged disposable container → install deterministic namespace/resource boundaries → run Codex with public networking through ordinary tools → revoke the model proxy and destroy the executor → validate/screen/review output → publish through the trusted controller. Only input, bounded telemetry and a structured report cross the container boundary; no executable output is imported.
+
 ## Controller pipeline
 
 1. Parse the GitHub Issue event as untrusted data.

@@ -1,5 +1,7 @@
 # Evidence-Aware Issue Investigator
 
+For protocol-level Issue investigation with ordinary public networking, use the [isolated online executor](docs/ISOLATED-EXECUTION.md). It places Codex in a disposable container, keeps real credentials and publishing outside, and reviews input/output instead of approving each network request. The older offline broker configuration below remains supported.
+
 A GitHub Action that turns a selectable coding-agent CLI into a bounded, evidence-aware first-line Issue investigator.
 
 It can read a disposable copy of a repository, trace code, run bounded tests, propose clearer reproduction steps, request an approved clean-room probe, retrieve duplicate candidates, and produce a maintainer-confirmed triage decision.

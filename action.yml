@@ -26,6 +26,9 @@ inputs:
   execution-mode:
     description: Optional plan or execute override.
     required: false
+  container-image:
+    description: Immutable image ID or repository digest built by the trusted workflow for container isolation.
+    required: false
 
 outputs:
   report-json:

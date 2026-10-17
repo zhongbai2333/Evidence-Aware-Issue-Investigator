@@ -11,7 +11,7 @@ const priorityRank = {
   critical: 4,
 } as const;
 
-const EXTERNAL_URL = /https?:\/\/[^\s"'<>)}\]]+/gi;
+const EXTERNAL_URL = /(?:https?|wss?):\/\/[^\s"'<>)}\]]+/gi;
 
 function redactEndpointUrls(value: string): string {
   return value.replace(EXTERNAL_URL, "[redacted-url]");

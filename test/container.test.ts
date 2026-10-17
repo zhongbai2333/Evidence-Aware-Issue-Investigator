@@ -1,0 +1,82 @@
+import http from "node:http";
+import { execFileSync } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import { runAgent } from "../src/runner";
+import { configSchema } from "../src/schema";
+import type { AgentInvocationPlan } from "../src/contracts";
+
+const image = process.env.EAI_CONTAINER_IMAGE;
+const enabled = process.platform === "linux" && !!image;
+
+describe.skipIf(!enabled)("real Linux container boundary", () => {
+  it("allows public networking while denying host access, credentials, privilege changes and source mutation", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "eai-boundary-source-"));
+    const hostSecret = path.join(os.tmpdir(), "eai-host-secret-" + Date.now());
+    let upstreamKey = "", upstreamTokens = 0, hostHits = 0;
+    const upstream = http.createServer(async (req, res) => {
+      upstreamKey = String(req.headers.authorization);
+      let body = ""; for await (const chunk of req) body += chunk;
+      upstreamTokens = JSON.parse(body).max_output_tokens;
+      res.end('{"ok":true}');
+    });
+    const hostOnly = http.createServer((req, res) => { hostHits++; res.end("HOST_SECRET"); });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    await new Promise<void>((resolve) => hostOnly.listen(0, "0.0.0.0", resolve));
+    const upstreamAddress = upstream.address(), hostAddress = hostOnly.address();
+    if (!upstreamAddress || typeof upstreamAddress === "string" || !hostAddress || typeof hostAddress === "string") throw new Error("no test server");
+    process.env.TEST_CONTAINER_KEY = "controller-secret-not-for-agent";
+    process.env.GITHUB_TOKEN = "github-controller-secret-not-for-agent";
+    try {
+      await writeFile(hostSecret, "HOST_SECRET");
+      await writeFile(path.join(workspace, "baseline.txt"), "original");
+      const report = {
+        schema_version: 1, issue: { repository: "example/project", number: 1, title: "Isolation test", url: "https://github.com/example/project/issues/1" },
+        agent: { engine: "codex", provider: "mock", model: "test-model" },
+        investigation: { status: "completed", summary: "Real container isolation assertions passed", code_path_identified: true, test_attempted: true, environment_match: "partial" },
+        reproduction: { status: "inconclusive", requested_probe: null, user_steps: [], proposed_steps: [], verified_steps: [] },
+        evidence: { commands: [], code_locations: [], observations: ["Public HTTPS, model proxy, host/metadata denial, read-only root and zero capabilities checked"] },
+        assessment: { type: "question", disposition: "none", duplicate_of: null, priority: "low", risk_flags: [], needs_info: false, suggested_title: null, questions: [], confidence: 0.7, limitations: [] },
+      };
+      await writeFile(path.join(workspace, "probe.mjs"), [
+        "import fs from 'node:fs'; import assert from 'node:assert/strict'; import {spawnSync} from 'node:child_process';",
+        "assert.equal(process.getuid(),1000); assert.equal(process.env.TEST_CONTAINER_KEY,undefined); assert.equal(process.env.GITHUB_TOKEN,undefined);",
+        `assert.equal(fs.existsSync(${JSON.stringify(hostSecret)}),false); assert.equal(fs.existsSync('/var/run/docker.sock'),false);`,
+        "assert.match(fs.readFileSync('/proc/self/status','utf8'),/CapEff:\\s+0+\\n/); assert.match(fs.readFileSync('/proc/self/status','utf8'),/NoNewPrivs:\\s+1/);",
+        "assert.throws(()=>fs.writeFileSync('/etc/host-escape','x')); assert.notEqual(spawnSync('iptables',['-P','OUTPUT','ACCEPT']).status,0);",
+        "assert.equal(fs.readFileSync('/sys/fs/cgroup/pids.max','utf8').trim(),'256');",
+        "const publicResponse=await fetch('https://example.com',{signal:AbortSignal.timeout(20000)}); assert.equal(publicResponse.status,200);",
+        "const gateway=new URL(process.env.PROXY_URL).hostname;",
+        `await assert.rejects(fetch('http://'+gateway+':${hostAddress.port}',{signal:AbortSignal.timeout(1500)}));`,
+        "await assert.rejects(fetch('http://169.254.169.254/latest/meta-data/',{signal:AbortSignal.timeout(1500)}));",
+        "const response=await fetch(process.env.PROXY_URL+'/responses',{method:'POST',headers:{authorization:'Bearer '+process.env.PROXY_TOKEN,'content-type':'application/json'},body:JSON.stringify({model:'test-model',max_output_tokens:999999})}); assert.equal(response.status,200);",
+        "fs.writeFileSync('baseline.txt','container-only change');",
+        `fs.writeFileSync(process.argv[2],${JSON.stringify(JSON.stringify(report))});`,
+      ].join("\n"));
+      const isolation = configSchema.parse({ investigation: { engine: "codex", network: true, isolation: { executor: "container", image } } }).investigation.isolation;
+      const plan: AgentInvocationPlan = {
+        engine: "codex", provider: "mock", model: "test-model", command: "/usr/local/bin/node",
+        args: ["{workspace}/probe.mjs", "{outputPath}"], cwd: workspace,
+        environment: { PROXY_URL: { value: "{proxyBaseUrl}", sensitive: false }, PROXY_TOKEN: { value: "{proxyToken}", sensitive: true } },
+        generatedFiles: {}, outputFormat: "jsonl", timeoutMs: 45_000,
+        versionCheck: { command: "codex", args: ["--version"], expectedVersion: "0.163.0" }, isolation,
+        credentialProxy: { upstreamBaseUrl: `http://127.0.0.1:${upstreamAddress.port}`, sourceEnv: "TEST_CONTAINER_KEY", protocol: "responses", maxRequests: 4, headersFromEnv: {} },
+      };
+      const result = await runAgent(plan);
+      expect(result.report.investigation.status).toBe("completed");
+      expect(upstreamKey).toBe("Bearer controller-secret-not-for-agent");
+      expect(upstreamTokens).toBe(8192);
+      expect(hostHits).toBe(0);
+      expect(await readFile(path.join(workspace, "baseline.txt"), "utf8")).toBe("original");
+      await expect(runAgent({ ...plan, command: "/usr/local/bin/node", args: ["-e", "setInterval(()=>{},1000)"], timeoutMs: 500 })).rejects.toThrow("time budget");
+      expect(execFileSync("docker", ["ps", "-aq", "--filter", "name=eai-"], { encoding: "utf8" }).trim()).toBe("");
+      expect(execFileSync("docker", ["network", "ls", "--format", "{{.Name}}", "--filter", "name=eai-"], { encoding: "utf8" }).trim()).toBe("");
+    } finally {
+      delete process.env.TEST_CONTAINER_KEY; delete process.env.GITHUB_TOKEN;
+      await Promise.all([rm(workspace,{recursive:true,force:true}),rm(hostSecret,{force:true})]);
+      await Promise.all([upstream,hostOnly].map((server)=>new Promise<void>((resolve)=>server.close(()=>resolve()))));
+    }
+  }, 120_000);
+});

@@ -139,7 +139,7 @@ function responsesEndpoint(baseUrl: string): string {
   return `${baseUrl.replace(/\/$/, "")}/responses`;
 }
 
-async function requestStructuredReview<T>(
+export async function requestStructuredReview<T>(
   provider: ProviderConfig,
   prompt: string,
   name: string,
@@ -170,6 +170,7 @@ async function requestStructuredReview<T>(
       input: prompt,
       store: false,
       stream: false,
+      max_output_tokens: 2048,
       text: { format: { type: "json_schema", name, strict: true, schema } },
     }),
     signal: AbortSignal.timeout(90_000),

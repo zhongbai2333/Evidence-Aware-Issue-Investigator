@@ -77,6 +77,7 @@ async function readBody(request: http.IncomingMessage): Promise<string | undefin
 
 export async function startCredentialProxy(
   spec: NonNullable<AgentInvocationPlan["credentialProxy"]>,
+  bindAddress = "127.0.0.1",
 ): Promise<CredentialProxyHandle> {
   const secret = process.env[spec.sourceEnv];
   if (!secret) throw new Error(`Required credential environment variable is missing: ${spec.sourceEnv}`);
@@ -85,6 +86,7 @@ export async function startCredentialProxy(
   }
   const token = randomBytes(32).toString("base64url");
   let requests = 0;
+  const shutdown = new AbortController();
   const additionalHeaders: Record<string, string> = {};
   for (const [header, envName] of Object.entries(spec.headersFromEnv)) {
     if (["GITHUB_TOKEN", "ACTIONS_RUNTIME_TOKEN", "ACTIONS_ID_TOKEN_REQUEST_TOKEN"].includes(envName)) {
@@ -116,11 +118,30 @@ export async function startCredentialProxy(
         response.writeHead(405).end("Method not allowed");
         return;
       }
+      let body = await readBody(request);
+      if (spec.allowedModel && request.method === "POST") {
+        if (!body || Buffer.byteLength(body) > 2 * 1024 * 1024) {
+          response.writeHead(413).end("Model input exceeds limit"); return;
+        }
+        const payload = JSON.parse(body) as Record<string, unknown>;
+        if (payload.model !== spec.allowedModel ||
+            (Array.isArray(payload.tools) && payload.tools.some((tool) => !["function", "custom"].includes(String(tool?.type))))) {
+          response.writeHead(403).end("Model or hosted tool is outside this investigation"); return;
+        }
+        payload.max_output_tokens = Math.min(
+          typeof payload.max_output_tokens === "number" && payload.max_output_tokens > 0 ? payload.max_output_tokens : Infinity,
+          spec.maxOutputTokens ?? 8192,
+        );
+        payload.store = false;
+        payload.background = false;
+        body = JSON.stringify(payload);
+      }
       const upstream = await fetch(upstreamUrl(spec.upstreamBaseUrl, requestUrl), {
         method: request.method,
         headers: injectedHeaders(request, spec.protocol, secret, additionalHeaders),
-        body: await readBody(request),
+        body,
         redirect: "error",
+        signal: AbortSignal.any([shutdown.signal, AbortSignal.timeout(120_000)]),
       });
       response.statusCode = upstream.status;
       for (const name of ["content-type", "cache-control", "x-request-id", "request-id"]) {
@@ -139,21 +160,23 @@ export async function startCredentialProxy(
       response.end();
     } catch (error) {
       if (response.headersSent) response.destroy(error instanceof Error ? error : undefined);
-      else response.writeHead(502).end(error instanceof Error ? error.message : "Credential proxy failure");
+      else response.writeHead(502).end("Credential proxy request failed");
     }
   });
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => resolve());
+    server.listen(0, bindAddress, () => resolve());
   });
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Credential proxy failed to bind");
   return {
-    baseUrl: `http://127.0.0.1:${address.port}`,
+    baseUrl: `http://${bindAddress}:${address.port}`,
     token,
     close: async () => await new Promise<void>((resolve, reject) => {
+      shutdown.abort();
       server.close((error) => error ? reject(error) : resolve());
+      server.closeAllConnections();
     }),
   };
 }

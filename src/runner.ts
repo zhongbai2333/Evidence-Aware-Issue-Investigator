@@ -17,7 +17,7 @@ import {
 } from "./egress-broker";
 
 const MAX_CAPTURE_BYTES = 1_000_000;
-const EXCLUDED_ROOT_NAMES = new Set([".git", ".env", ".DS_Store"]);
+const EXCLUDED_ROOT_NAMES = new Set([".git", ".env", ".DS_Store", "node_modules", "target", ".ssh", ".aws", ".azure", ".kube", ".config"]);
 
 export interface WorkspaceChange {
   path: string;
@@ -38,6 +38,7 @@ function shouldExcludeWorkspacePath(relativePath: string): boolean {
     EXCLUDED_ROOT_NAMES.has(rootName) ||
     baseName === ".env" ||
     baseName.startsWith(".env.") ||
+    [".npmrc", ".netrc", "credentials", "credentials.json", "auth.json", "id_rsa", "id_ed25519"].includes(baseName) ||
     baseName.endsWith(".pem") ||
     baseName.endsWith(".key")
   );
@@ -163,6 +164,15 @@ export function assertExecutionSafety(
   provider: ProviderConfig | null,
 ): void {
   if (config.investigation.mode !== "execute") return;
+  if (config.investigation.isolation.executor === "container") {
+    if (!config.investigation.isolation.image) throw new Error("Container isolation requires an immutable image digest");
+    if (!provider || provider.auth.mode !== "environment" || provider.protocol !== "responses") {
+      throw new Error("Container isolation requires a Responses provider with controller-proxied environment authentication");
+    }
+    if (config.investigation.command || config.cli.install !== "preinstalled" || !config.cli.versions.codex) {
+      throw new Error("Container isolation requires a version-pinned preinstalled Codex CLI and no custom command");
+    }
+  }
   if (
     provider?.auth.mode === "environment" &&
     config.investigation.engine === "custom" &&
@@ -188,7 +198,7 @@ function parseJsonCandidate(raw: string): unknown {
   }
 }
 
-function normalizeAgentOutput(engine: AgentInvocationPlan["engine"], raw: string): unknown {
+export function normalizeAgentOutput(engine: AgentInvocationPlan["engine"], raw: string): unknown {
   let parsed: unknown;
   try {
     parsed = parseJsonCandidate(raw);
@@ -252,7 +262,7 @@ async function verifyCliVersion(
   }
 }
 
-function parseObservedCommands(engine: AgentInvocationPlan["engine"], stdout: string): ObservedCommand[] {
+export function parseObservedCommands(engine: AgentInvocationPlan["engine"], stdout: string): ObservedCommand[] {
   if (engine !== "codex") return [];
   const commands: ObservedCommand[] = [];
   for (const line of stdout.split(/\r?\n/)) {
@@ -282,6 +292,9 @@ function parseObservedCommands(engine: AgentInvocationPlan["engine"], stdout: st
 }
 
 export async function runAgent(plan: AgentInvocationPlan): Promise<AgentRunResult> {
+  if (plan.isolation?.executor === "container") {
+    return await (await import("./container-runner")).runContainerAgent(plan);
+  }
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "issue-investigator-"));
   const schemaPath = path.join(tempDir, "report.schema.json");
   const outputPath = path.join(tempDir, "report.json");
