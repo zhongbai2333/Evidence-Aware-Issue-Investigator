@@ -16,6 +16,7 @@ function renderProviderConfig(
   const lines = [
     `model = ${tomlString(provider.model)}`,
     'approval_policy = "never"',
+    'web_search = "disabled"',
     'sandbox_mode = "workspace-write"',
     "allow_login_shell = false",
     "",
