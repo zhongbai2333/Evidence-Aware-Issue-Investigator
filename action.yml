@@ -29,6 +29,9 @@ inputs:
   container-image:
     description: Immutable image ID or repository digest built by the trusted workflow for container isolation.
     required: false
+  report-path:
+    description: Optional absolute path inside RUNNER_TEMP for the screened JSON report; existing files are never overwritten.
+    required: false
 
 outputs:
   report-json:

@@ -16,6 +16,7 @@ import { runReplay } from "./replay";
 import { handleStateEvent, type StateOperation } from "./state";
 import { reviewAndDownloadAttachments, type ControllerNetworkReview } from "./network-review";
 import { controllerSecrets, reviewBoundary, screenText, screenValue } from "./boundary";
+import { writeScreenedReport } from "./report-file";
 
 function publicControllerReview(review: ControllerNetworkReview) {
   return {
@@ -255,6 +256,10 @@ async function main(): Promise<void> {
             prompt,
             workspace,
           });
+          plan.reportIdentity = {
+            issue:{repository:issue.repository,number:issue.number,title:issue.title,url:issue.url},
+            agent:{engine:plan.engine,provider:plan.provider,model:plan.model},
+          };
           plan.workspaceFiles = Object.fromEntries(
             controllerReview.attachments.map((attachment) => [attachment.path, attachment.content]),
           );
@@ -337,6 +342,11 @@ async function main(): Promise<void> {
     }
   }
 
+  const reportPath = core.getInput("report-path");
+  if (reportPath) {
+    if (!process.env.RUNNER_TEMP) throw new Error("report-path requires RUNNER_TEMP");
+    await writeScreenedReport(reportPath,report,process.env.RUNNER_TEMP);
+  }
   if (core.getBooleanInput("publish-comment")) {
     await publishComment(token, report);
   }

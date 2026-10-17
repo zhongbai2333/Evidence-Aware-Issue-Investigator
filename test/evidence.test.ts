@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DuplicateCandidate, InvestigationReport } from "../src/contracts";
 import { normalizeEvidence } from "../src/evidence";
 import { configSchema } from "../src/schema";
+import { investigationReportSchema } from "../src/report";
 
 function report(overrides: Partial<InvestigationReport["assessment"]> = {}): InvestigationReport {
   return {
@@ -46,6 +47,13 @@ function report(overrides: Partial<InvestigationReport["assessment"]> = {}): Inv
 const config = configSchema.parse({ investigation: { trigger: "always", engine: "codex" } });
 
 describe("normalizeEvidence", () => {
+  it("keeps legitimate maximum-length model text and long real commands valid for publication", () => {
+    const raw=report(); raw.evidence.observations=["x".repeat(1000)];
+    const normalized=normalizeEvidence(raw,{config,duplicateCandidates:[],workspaceChanges:[],
+      observedCommands:[{command:"python3 "+"x".repeat(4000),exitCode:0,observation:"y".repeat(6000)}]});
+    expect(()=>investigationReportSchema.parse(normalized)).not.toThrow();
+    expect(normalized.evidence.commands[0]?.command).toContain("[truncated]");
+  });
   it("prevents an unreproduced report like #408 from becoming high priority", () => {
     const normalized = normalizeEvidence(report(), {
       config,

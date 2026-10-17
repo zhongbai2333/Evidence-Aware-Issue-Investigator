@@ -44,6 +44,7 @@ export interface AgentInvocationPlan {
   generatedFiles: Record<string, string>;
   workspaceFiles?: Record<string, Buffer>;
   isolation?: InvestigatorConfig["investigation"]["isolation"];
+  reportIdentity?: Pick<InvestigationReport, "issue" | "agent">;
   reviewedEgress?: {
     issue: IssueSnapshot;
     provider: ProviderConfig;

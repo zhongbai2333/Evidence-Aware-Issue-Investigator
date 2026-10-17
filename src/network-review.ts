@@ -115,11 +115,13 @@ function extractResponseText(payload: unknown): string {
   if (!payload || typeof payload !== "object") return "";
   const response = payload as {
     output_text?: string;
-    output?: Array<{ content?: Array<{ text?: string; type?: string }> }>;
+    output?: Array<{ type?: string; content?: Array<{ text?: string; type?: string }> }>;
   };
   if (typeof response.output_text === "string") return response.output_text;
   return (response.output ?? [])
+    .filter((item) => item.type !== "reasoning")
     .flatMap((item) => item.content ?? [])
+    .filter((part) => !part.type || part.type === "output_text" || part.type === "text")
     .map((item) => typeof item.text === "string" ? item.text : "")
     .filter(Boolean)
     .join("\n");
@@ -145,6 +147,7 @@ export async function requestStructuredReview<T>(
   name: string,
   schema: object,
   validator: z.ZodType<T>,
+  maxOutputTokens = 2048,
 ): Promise<T> {
   if (provider.protocol !== "responses") throw new Error("Controller Auto-review requires the Responses protocol");
   if (!provider.baseUrl) throw new Error("Controller Auto-review requires a Provider baseUrl");
@@ -158,26 +161,37 @@ export async function requestStructuredReview<T>(
     if (!value) throw new Error(`Controller Auto-review header credential is unavailable: ${envName}`);
     return [header, value];
   }));
-  const response = await fetch(responsesEndpoint(provider.baseUrl), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${credential}`,
-      ...extraHeaders,
-    },
-    body: JSON.stringify({
-      model: provider.model,
-      input: prompt,
-      store: false,
-      stream: false,
-      max_output_tokens: 2048,
-      text: { format: { type: "json_schema", name, strict: true, schema } },
-    }),
-    signal: AbortSignal.timeout(90_000),
-  });
-  if (!response.ok) throw new Error(`Controller Auto-review Provider returned HTTP ${response.status}`);
-  const payload = await response.json();
-  return validator.parse(parseJsonCandidate(extractResponseText(payload)));
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await fetch(responsesEndpoint(provider.baseUrl), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${credential}`,
+        ...extraHeaders,
+      },
+      body: JSON.stringify({
+        model: provider.model,
+        input: attempt === 0 ? prompt : `${prompt}\nReturn strictly valid JSON with double-quoted property names. No Markdown or additional prose.`,
+        store: false,
+        stream: false,
+        max_output_tokens: maxOutputTokens,
+        text: { format: { type: "json_schema", name, strict: true, schema } },
+      }),
+      signal: AbortSignal.timeout(90_000),
+    });
+    if (!response.ok) throw new Error(`Controller Auto-review Provider returned HTTP ${response.status}`);
+    let responseText = "";
+    try {
+      responseText = extractResponseText(await response.json());
+      return validator.parse(parseJsonCandidate(responseText));
+    } catch (error) {
+      if (attempt === 0) continue;
+      let diagnostic = responseText;
+      for (const secret of [credential, ...Object.values(extraHeaders)]) diagnostic = diagnostic.split(secret).join("[redacted-secret]");
+      throw new Error(`Controller ${name} returned an invalid structured response: ${redactUrls(diagnostic).slice(0,300)} (${error instanceof Error ? error.name : "parse failure"})`);
+    }
+  }
+  throw new Error(`Controller ${name} did not return a structured response`);
 }
 
 async function requestReview(

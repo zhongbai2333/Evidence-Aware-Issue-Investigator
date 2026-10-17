@@ -54,7 +54,7 @@ Select a Responses-compatible provider with environment authentication. The key 
     publish-comment: "true"
 ```
 
-An `image` under `isolation` may alternatively be a repository digest or local `sha256:` image ID. Tags are rejected. Linux, Docker, passwordless controller `sudo nsenter`, iptables quota support, ip6tables and `tc` are required. Bubblewrap/AppArmor setup is unnecessary in this mode. Model-request/token ceilings bound usage but are not an exact dollar-spend guarantee; provider-side spending limits can add a monetary ceiling. The input/output reviews add at most two bounded provider requests per attempt.
+An `image` under `isolation` may alternatively be a repository digest or local `sha256:` image ID. Tags are rejected. Linux, Docker, passwordless controller `sudo nsenter`, iptables quota support, ip6tables and `tc` are required. Bubblewrap/AppArmor setup is unnecessary in this mode. Model-request/token ceilings bound usage but are not an exact dollar-spend guarantee; provider-side spending limits can add a monetary ceiling. There are two controller boundary reviews and, only for an unstructured executor answer, one formatting operation. Each structured controller call may retry malformed output once; valid rejections are never retried to obtain approval. Thus controller work adds at most six bounded provider requests per attempt. A reformatted answer is marked inconclusive and capped at 0.7 confidence until independently verified.
 
 ## Verification and limits
 
@@ -63,3 +63,5 @@ CI builds the actual executor and checks public HTTPS, real-key substitution at 
 Containers share the host kernel. This is an explicit isolation boundary, not a claim of absolute isolation or immunity to kernel/runtime vulnerabilities. Use an ephemeral dedicated hosted runner, not a persistent machine containing unrelated secrets. A microVM can be substituted when a separate kernel is required.
 
 Input screening and an independent reviewer cannot prove arbitrary data is safe, nor can they prove a model's conclusion correct. Public networking means executor-visible data can leave the container; do not seed private logs, private source, or confidential attachments without a separate data policy. The DeepSeek cloud model remains outside the container and receives the selected input via the controller proxy. Executor JSONL is untrusted telemetry, not independent reproduction proof; clean trusted replay remains the stronger verification mechanism.
+
+Use the optional `report-path` Action input to write a screened JSON report directly to a fresh file inside `RUNNER_TEMP`. This avoids shell environment size limits for reports containing many command observations. The controller refuses existing files, symlink escapes and files above 1 MiB.

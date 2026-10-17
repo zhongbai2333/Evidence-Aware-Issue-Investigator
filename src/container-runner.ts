@@ -7,8 +7,8 @@ import type { AgentInvocationPlan } from "./contracts";
 import { copyDisposableWorkspace, normalizeAgentOutput, parseObservedCommands, type AgentRunResult } from "./runner";
 import { startCredentialProxy, type CredentialProxyHandle } from "./proxy";
 import { investigationReportSchema } from "./report";
-import { REPORT_JSON_SCHEMA } from "./schema";
-import { containsCredential, controllerSecrets, screenText } from "./boundary";
+import { REPORT_JSON_SCHEMA, providerSchema } from "./schema";
+import { containsCredential, controllerSecrets, screenText, structureExecutorReport } from "./boundary";
 
 const MAX_CAPTURE = 1_000_000;
 const SESSION = "/work/session";
@@ -156,7 +156,24 @@ export async function runContainerAgent(plan: AgentInvocationPlan): Promise<Agen
     const readResult = await execute("docker", ["exec", name, "/usr/local/bin/node", "--input-type=module", "-e",
       `import fs from 'node:fs'; const fd=fs.openSync('${SESSION}/report.json',fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW); const s=fs.fstatSync(fd); if(!s.isFile()||s.size>262144)process.exit(2); const b=Buffer.alloc(262145);const n=fs.readSync(fd,b,0,b.length,0);if(n>262144)process.exit(2); process.stdout.write(b.subarray(0,n));`]);
     await checked("docker", ["kill", name]);
-    const report = investigationReportSchema.parse(normalizeAgentOutput(plan.engine, readResult.code === 0 ? readResult.stdout : result.stdout));
+    const resultText = readResult.code === 0 ? readResult.stdout : result.stdout;
+    let report;
+    try {
+      report = investigationReportSchema.parse(normalizeAgentOutput(plan.engine, resultText));
+    } catch {
+      // Formatting is a controller-only operation after the executor and its credentials are revoked.
+      let answer = resultText;
+      if (readResult.code !== 0) for (const line of result.stdout.split(/\r?\n/)) {
+        try {
+          const event = JSON.parse(line);
+          if (event.type === "item.completed" && event.item?.type === "agent_message" && typeof event.item.text === "string") answer=event.item.text;
+        } catch { /* Ignore diagnostic lines; they are never executed. */ }
+      }
+      report = await structureExecutorReport(screenText(answer,[...secrets,variables.proxyToken!]), providerSchema.parse({
+        kind:"compatible",model:plan.model,baseUrl:plan.credentialProxy.upstreamBaseUrl,protocol:plan.credentialProxy.protocol,
+        auth:{mode:"environment",env:plan.credentialProxy.sourceEnv},headersFromEnv:plan.credentialProxy.headersFromEnv,
+      }),plan.reportIdentity);
+    }
     report.evidence.observations = report.evidence.observations.slice(0,99);
     report.evidence.observations.push(`Controller model proxy: ${proxyStats.forwarded} upstream request(s), ${proxyStats.budgetDenied} budget denial(s), ${proxyStats.upstreamRateLimited} upstream rate-limit response(s).`);
     // JSONL is executor telemetry, not independent proof that the untrusted executor's conclusions are correct.
