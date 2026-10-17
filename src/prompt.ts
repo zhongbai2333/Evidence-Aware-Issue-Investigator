@@ -2,6 +2,11 @@ import type { DuplicateCandidate, IssueSnapshot } from "./contracts";
 
 export interface InvestigationPromptContext {
   duplicateCandidates?: DuplicateCandidate[];
+  controllerReview?: {
+    status: "not-needed" | "completed" | "failed";
+    summary: string;
+    attachments: Array<{ path: string; filename: string; bytes: number; sha256: string }>;
+  };
 }
 
 export function buildInvestigationPrompt(
@@ -26,7 +31,8 @@ export function buildInvestigationPrompt(
     "You are an evidence-aware GitHub Issue investigator.",
     "Investigate the report as a senior first-line maintainer. Do not fix production code, commit, push, publish, or call GitHub APIs.",
     "You may inspect repository files, trace code paths, and run bounded non-destructive tests in the disposable workspace.",
-    "When essential public evidence or a user attachment requires network access, request a reviewed, read-only network escalation for the exact target.",
+    "Network access is unavailable to this Agent. The controller may separately review and download exact public Issue attachments before this run.",
+    "Inspect approved local attachments listed in CONTROLLER_REVIEW when relevant; never attempt to bypass the network boundary.",
     "Never upload repository data, Issue data, credentials, logs, or artifacts to an external destination.",
     "Do not expose raw service endpoint URLs in the report; describe the service generically instead.",
     "Distinguish user-reported steps, proposed steps, and steps you actually verified.",
@@ -46,5 +52,13 @@ export function buildInvestigationPrompt(
     "<DUPLICATE_CANDIDATES>",
     JSON.stringify(context.duplicateCandidates ?? [], null, 2),
     "</DUPLICATE_CANDIDATES>",
+    "",
+    "<CONTROLLER_REVIEW>",
+    JSON.stringify(context.controllerReview ?? {
+      status: "not-needed",
+      summary: "No controller-reviewed attachments were supplied.",
+      attachments: [],
+    }, null, 2),
+    "</CONTROLLER_REVIEW>",
   ].join("\n");
 }

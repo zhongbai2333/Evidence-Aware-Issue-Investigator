@@ -14,6 +14,15 @@ import { searchDuplicateCandidates } from "./duplicates";
 import { normalizeEvidence } from "./evidence";
 import { runReplay } from "./replay";
 import { handleStateEvent, type StateOperation } from "./state";
+import { reviewAndDownloadAttachments, type ControllerNetworkReview } from "./network-review";
+
+function publicControllerReview(review: ControllerNetworkReview) {
+  return {
+    status: review.status,
+    summary: review.summary,
+    attachments: review.attachments.map(({ path, filename, bytes, sha256 }) => ({ path, filename, bytes, sha256 })),
+  };
+}
 
 function plannedReport(
   issue: IssueSnapshot,
@@ -184,8 +193,8 @@ async function main(): Promise<void> {
     report = plannedReport(issue, "none", providerName, provider?.model ?? null, "No agent engine is configured.", "skipped");
   } else {
     operation = "investigate";
-    const prompt = buildInvestigationPrompt(issue, { duplicateCandidates });
     if (config.investigation.mode === "plan") {
+      const prompt = buildInvestigationPrompt(issue, { duplicateCandidates });
       const plan = planAgentInvocation({ config, providerName, provider, prompt, workspace });
       assertExecutionSafety(config, provider);
       report = plannedReport(
@@ -206,6 +215,25 @@ async function main(): Promise<void> {
           if (attemptName) attemptConfig.investigation.provider = attemptName;
           else delete attemptConfig.investigation.provider;
           const resolved = resolveProvider(attemptConfig);
+          const controllerReview = attemptConfig.investigation.approvalMode === "auto-review"
+            ? await reviewAndDownloadAttachments(issue, resolved.provider)
+            : {
+                status: "not-needed" as const,
+                summary: "Controller Auto-review is disabled.",
+                attachments: [],
+                decisions: [],
+              };
+          core.info(`Controller Auto-review status: ${controllerReview.status}; approved ${controllerReview.attachments.length} attachment(s).`);
+          for (const decision of controllerReview.decisions) {
+            core.info(`Controller Auto-review ${decision.approved ? "approved" : "denied"} ${decision.id}: ${decision.reason.replace(/https?:\/\/\S+/gi, "[redacted-url]").slice(0, 500)}`);
+          }
+          if (controllerReview.status === "failed") {
+            core.warning(`Controller Auto-review failed closed: ${controllerReview.summary}`);
+          }
+          const prompt = buildInvestigationPrompt(issue, {
+            duplicateCandidates,
+            controllerReview: publicControllerReview(controllerReview),
+          });
           const plan = planAgentInvocation({
             config: attemptConfig,
             providerName: resolved.name,
@@ -213,6 +241,9 @@ async function main(): Promise<void> {
             prompt,
             workspace,
           });
+          plan.workspaceFiles = Object.fromEntries(
+            controllerReview.attachments.map((attachment) => [attachment.path, attachment.content]),
+          );
           assertExecutionSafety(attemptConfig, resolved.provider);
           const result = await runAgent(plan);
           const boundReport = investigationReportSchema.parse({
@@ -229,6 +260,15 @@ async function main(): Promise<void> {
               model: plan.model,
             },
           });
+          if (controllerReview.status === "completed") {
+            boundReport.evidence.observations.push(
+              `Controller Auto-review approved and supplied ${controllerReview.attachments.length} public Issue attachment(s).`,
+            );
+          } else if (controllerReview.status === "failed") {
+            boundReport.assessment.limitations.push(
+              `Controller Auto-review failed closed: ${controllerReview.summary}`,
+            );
+          }
           let replay;
           if (boundReport.reproduction.requested_probe && attemptConfig.replay.enabled) {
             try {

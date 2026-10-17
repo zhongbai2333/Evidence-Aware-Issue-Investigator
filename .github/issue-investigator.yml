@@ -28,6 +28,7 @@ investigation:
   timeoutMinutes: 20
   maxTurns: 20
   workspace: workspace-write
+  # Review exact public Issue attachments in the controller; keep the investigation Agent offline.
   approvalMode: auto-review
   network: false
 

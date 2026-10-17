@@ -40,6 +40,7 @@ export interface AgentInvocationPlan {
     }
   >;
   generatedFiles: Record<string, string>;
+  workspaceFiles?: Record<string, Buffer>;
   outputFormat: "json" | "jsonl" | "text";
   timeoutMs: number;
   versionCheck: {
