@@ -9,6 +9,12 @@ import { investigationReportSchema, type ValidatedInvestigationReport } from "./
 import type { InvestigatorConfig, ProviderConfig } from "./schema";
 import { REPORT_JSON_SCHEMA } from "./schema";
 import { startCredentialProxy, type CredentialProxyHandle } from "./proxy";
+import {
+  REVIEWED_EGRESS_CLIENT,
+  startReviewedEgressBroker,
+  type ReviewedEgressAudit,
+  type ReviewedEgressBrokerHandle,
+} from "./egress-broker";
 
 const MAX_CAPTURE_BYTES = 1_000_000;
 const EXCLUDED_ROOT_NAMES = new Set([".git", ".env", ".DS_Store"]);
@@ -220,6 +226,7 @@ export interface AgentRunResult {
   stderr: string;
   workspaceChanges: WorkspaceChange[];
   observedCommands: ObservedCommand[];
+  reviewedEgressAudits: ReviewedEgressAudit[];
 }
 
 async function verifyCliVersion(
@@ -280,6 +287,7 @@ export async function runAgent(plan: AgentInvocationPlan): Promise<AgentRunResul
   const outputPath = path.join(tempDir, "report.json");
   const agentWorkspace = path.join(tempDir, "workspace");
   let proxy: CredentialProxyHandle | null = null;
+  let reviewedEgress: ReviewedEgressBrokerHandle | null = null;
 
   try {
     if (plan.credentialProxy) proxy = await startCredentialProxy(plan.credentialProxy);
@@ -301,7 +309,18 @@ export async function runAgent(plan: AgentInvocationPlan): Promise<AgentRunResul
       await mkdir(path.dirname(absolutePath), { recursive: true });
       await writeFile(absolutePath, content);
     }
+    if (plan.reviewedEgress) {
+      const clientPath = path.join(agentWorkspace, ".issue-investigator/bin/eai-fetch.mjs");
+      await mkdir(path.dirname(clientPath), { recursive: true });
+      await writeFile(clientPath, REVIEWED_EGRESS_CLIENT, "utf8");
+    }
     const beforeManifest = await collectWorkspaceManifest(agentWorkspace);
+    if (plan.reviewedEgress) {
+      reviewedEgress = await startReviewedEgressBroker({
+        socketPath: path.join(agentWorkspace, ".issue-investigator/reviewed-egress.sock"),
+        ...plan.reviewedEgress,
+      });
+    }
     const isolatedHome = path.join(tempDir, "home");
     await mkdir(isolatedHome, { recursive: true });
     await writeFile(schemaPath, `${JSON.stringify(REPORT_JSON_SCHEMA, null, 2)}\n`, "utf8");
@@ -389,6 +408,11 @@ export async function runAgent(plan: AgentInvocationPlan): Promise<AgentRunResul
         `stderr tail:\n${sanitizeDiagnosticOutput(stderr, 2000) || "(empty)"}`,
       ].join("\n"));
     }
+    const reviewedEgressAudits = reviewedEgress?.audits ?? [];
+    if (reviewedEgress) {
+      await reviewedEgress.close();
+      reviewedEgress = null;
+    }
     const afterManifest = await collectWorkspaceManifest(agentWorkspace);
     return {
       report,
@@ -397,9 +421,17 @@ export async function runAgent(plan: AgentInvocationPlan): Promise<AgentRunResul
       stderr,
       workspaceChanges: compareManifests(beforeManifest, afterManifest),
       observedCommands: parseObservedCommands(plan.engine, stdout),
+      reviewedEgressAudits,
     };
   } finally {
-    if (proxy) await proxy.close();
-    await rm(tempDir, { recursive: true, force: true });
+    try {
+      if (reviewedEgress) await reviewedEgress.close();
+    } finally {
+      try {
+        if (proxy) await proxy.close();
+      } finally {
+        await rm(tempDir, { recursive: true, force: true });
+      }
+    }
   }
 }

@@ -51,13 +51,17 @@ investigation:
   workspace: workspace-write # read-only | workspace-write
   approvalMode: auto-review # never | auto-review (Codex only)
   network: false
+  reviewedNetworkMaxRequests: 8
+  reviewedNetworkMaxResponseBytes: 2097152
 ```
 
 `command` and `argsPrefix` may select a trusted preinstalled wrapper. They are configuration, not Issue-controlled input, and are always executed with `shell: false`.
 
-With `approvalMode: auto-review`, the investigation Agent remains offline. Before it starts, the controller extracts only exact public `github.com/user-attachments/files/...` candidates from the Issue, asks the selected Responses-compatible Provider/model to review each candidate, and downloads approved files into the disposable workspace. Downloads are anonymous, HTTPS-only, restricted to allowlisted GitHub redirect hosts, limited to five files, 10 MiB per file, and 20 MiB total. Reviewer errors fail closed. Configuration rejects `auto-review` together with `network: true`, because that would pre-authorize Agent network traffic and bypass the intended review point.
+With `approvalMode: auto-review`, the investigation Agent remains offline. Before it starts, the controller reviews public `github.com/user-attachments/files/...` candidates and stages approved attachments. During the run, the injected `.issue-investigator/bin/eai-fetch.mjs` client can propose exact public HTTPS `GET` or `HEAD` requests. Every request and redirect is separately reviewed by the selected Provider/model; the controller performs the actual fetch and returns the bounded response to the disposable workspace.
 
-Controller Auto-review currently requires environment authentication and the Responses protocol. It uses the configured Provider/model directly and does not require an OpenAI account. It does not approve arbitrary Agent commands or general URLs. Treat unit tests as insufficient; run a live attachment review and download for each advertised Provider/model combination before enabling it in production.
+The broker deterministically rejects URL credentials, IP literals, local/metadata hostnames, non-443 ports, fragments, DNS answers containing non-public addresses, request bodies, and methods other than `GET`/`HEAD`. It sends no cookies or authentication headers. `reviewedNetworkMaxRequests` and `reviewedNetworkMaxResponseBytes` bound each run. Reviewer or transport errors fail closed. Configuration rejects `auto-review` together with `network: true`, because that would pre-authorize Agent traffic and bypass the broker.
+
+Controller Auto-review currently requires environment authentication and the Responses protocol. It uses the configured Provider/model directly and does not require an OpenAI account. It never approves arbitrary Agent commands, uploads, authenticated requests, WebSockets, or unrestricted sockets. Treat unit tests as insufficient; run a live attachment and dynamic-request review for each advertised Provider/model combination before enabling it in production.
 
 ## Triage and evidence
 

@@ -21,6 +21,7 @@ function publicControllerReview(review: ControllerNetworkReview) {
     status: review.status,
     summary: review.summary,
     attachments: review.attachments.map(({ path, filename, bytes, sha256 }) => ({ path, filename, bytes, sha256 })),
+    reviewedEgressAvailable: false,
   };
 }
 
@@ -232,7 +233,10 @@ async function main(): Promise<void> {
           }
           const prompt = buildInvestigationPrompt(issue, {
             duplicateCandidates,
-            controllerReview: publicControllerReview(controllerReview),
+            controllerReview: {
+              ...publicControllerReview(controllerReview),
+              reviewedEgressAvailable: attemptConfig.investigation.approvalMode === "auto-review" && !!resolved.provider,
+            },
           });
           const plan = planAgentInvocation({
             config: attemptConfig,
@@ -244,6 +248,14 @@ async function main(): Promise<void> {
           plan.workspaceFiles = Object.fromEntries(
             controllerReview.attachments.map((attachment) => [attachment.path, attachment.content]),
           );
+          if (attemptConfig.investigation.approvalMode === "auto-review" && resolved.provider) {
+            plan.reviewedEgress = {
+              issue,
+              provider: resolved.provider,
+              maxRequests: attemptConfig.investigation.reviewedNetworkMaxRequests,
+              maxResponseBytes: attemptConfig.investigation.reviewedNetworkMaxResponseBytes,
+            };
+          }
           assertExecutionSafety(attemptConfig, resolved.provider);
           const result = await runAgent(plan);
           const boundReport = investigationReportSchema.parse({
@@ -260,11 +272,7 @@ async function main(): Promise<void> {
               model: plan.model,
             },
           });
-          if (controllerReview.status === "completed") {
-            boundReport.evidence.observations.push(
-              `Controller Auto-review approved and supplied ${controllerReview.attachments.length} public Issue attachment(s).`,
-            );
-          } else if (controllerReview.status === "failed") {
+          if (controllerReview.status === "failed") {
             boundReport.assessment.limitations.push(
               `Controller Auto-review failed closed: ${controllerReview.summary}`,
             );
@@ -284,6 +292,19 @@ async function main(): Promise<void> {
             workspaceChanges: result.workspaceChanges,
             replay,
           });
+          if (controllerReview.status === "completed") {
+            completedReport.evidence.observations.push(
+              `Controller Auto-review approved and supplied ${controllerReview.attachments.length} public Issue attachment(s).`,
+            );
+          }
+          const approvedNetwork = result.reviewedEgressAudits.filter((item) => item.approved && item.statusCode !== null);
+          const deniedNetwork = result.reviewedEgressAudits.filter((item) => !item.approved);
+          const failedNetwork = result.reviewedEgressAudits.filter((item) => item.approved && item.statusCode === null);
+          if (approvedNetwork.length || deniedNetwork.length || failedNetwork.length) {
+            completedReport.evidence.observations.push(
+              `Controller reviewed dynamic network requests: ${approvedNetwork.length} completed, ${deniedNetwork.length} denied, ${failedNetwork.length} failed closed.`,
+            );
+          }
           break;
         } catch (error) {
           const failure = error instanceof Error ? error.message : String(error);

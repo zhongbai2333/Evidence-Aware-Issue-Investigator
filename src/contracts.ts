@@ -1,3 +1,5 @@
+import type { ProviderConfig } from "./schema";
+
 export type AgentEngine = "none" | "codex" | "claude" | "dsh" | "custom";
 
 export type ProviderProtocol =
@@ -41,6 +43,12 @@ export interface AgentInvocationPlan {
   >;
   generatedFiles: Record<string, string>;
   workspaceFiles?: Record<string, Buffer>;
+  reviewedEgress?: {
+    issue: IssueSnapshot;
+    provider: ProviderConfig;
+    maxRequests: number;
+    maxResponseBytes: number;
+  };
   outputFormat: "json" | "jsonl" | "text";
   timeoutMs: number;
   versionCheck: {

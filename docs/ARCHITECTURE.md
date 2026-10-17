@@ -10,12 +10,13 @@
 6. Copy source into a filtered `.git`-less disposable workspace.
 7. Start a short-lived credential proxy when environment authentication is configured.
 8. Optionally let a controller-side Reviewer approve exact public Issue attachments, download approved files through a narrow allowlist, and seed them into the disposable workspace.
-9. Run the investigation Agent offline with bounded time/output and a strict output Schema.
-9. Capture controller-observable CLI events and workspace changes.
-10. Optionally run one Agent-requested, controller-approved probe on another clean copy.
-11. Rebind identity, validate duplicate targets, normalize evidence, and cap priority.
-12. Return outputs and optionally upsert one bot-owned sticky comment.
-13. Apply labels, assignee, or closure only after an authorized maintainer adds Confirm.
+9. Start a filesystem-socket egress broker when Auto-review is enabled. It reviews and validates every proposed public HTTPS `GET`/`HEAD` and redirect while the Agent's direct network remains disabled.
+10. Run the investigation Agent offline with bounded time/output and a strict output Schema.
+11. Capture controller-observable CLI events, reviewed-request audit counts, and workspace changes.
+12. Optionally run one Agent-requested, controller-approved probe on another clean copy.
+13. Rebind identity, validate duplicate targets, normalize evidence, and cap priority.
+14. Return outputs and optionally upsert one bot-owned sticky comment.
+15. Apply labels, assignee, or closure only after an authorized maintainer adds Confirm.
 
 ## Separation of concerns
 
@@ -60,4 +61,4 @@ Container replay requires an immutable image digest and uses no capabilities, no
 
 ## Evidence ownership
 
-Agent observations and Auto-review decisions remain untrusted. The controller, not the Agent, enforces attachment URL shape, HTTPS redirects, host allowlists, and byte limits. Controller-observed command events, file changes, duplicate candidates, and clean replay results are separate evidence lanes. Only controller evidence can preserve a `reproduced` claim or produce `verified_steps` under the default policy. Endpoint URLs are redacted before report publication and marker encoding.
+Agent observations and Auto-review decisions remain untrusted. The controller, not the Agent, enforces attachment URL shape plus dynamic-request method, HTTPS, credentials, ports, DNS address class, redirects, request count, and response byte limits. Controller-observed command events, reviewed-request counts, file changes, duplicate candidates, and clean replay results are separate evidence lanes. Only controller evidence can preserve a `reproduced` claim or produce `verified_steps` under the default policy. Endpoint URLs are redacted before report publication and marker encoding.
